@@ -332,51 +332,14 @@
     </div>
   </div>
 
-  <script type="module">
-    import { loginUser, createUser } from './js/userService.js';
-    import { getSession } from './js/auth.js'; // Keeping session helper
-
-    // Sample UI Logic for Login
-    async function performLogin() {
-      const idInput = document.getElementById("stuLoginId");
-      const msgEl = "stuLoginMsg";
-
-      try {
-        const user = await loginUser(idInput.value);
-        showMsg(msgEl, `Welcome back, ${user.id}!`, "success");
-        setTimeout(() => window.location.href = "dashboard.html", 800);
-      } catch (err) {
-        showMsg(msgEl, err.message, "error");
-      }
-    }
-
-    // Sample UI Logic for Registration
-    async function performRegistration() {
-      const idInput = document.getElementById("regId");
-      const nameInput = document.getElementById("regStudentName");
-      const msgEl = "registerMsg";
-
-      try {
-        await createUser(idInput.value, nameInput.value);
-        showMsg(msgEl, "Account created! You can now login.", "success");
-      } catch (err) {
-        showMsg(msgEl, err.message, "error");
-      }
-    }
-
-    // Attach listeners since modules don't expose globals to HTML
-    window.addEventListener('load', () => {
-      // Mapping the buttons in the existing HTML to these new functions
-      const loginBtn = document.querySelector("#studentLoginForm button.submit");
-      const regBtn = document.querySelector("#studentRegisterForm button.submit");
-
-      if (loginBtn) loginBtn.onclick = performLogin;
-      if (regBtn) regBtn.onclick = performRegistration;
-    });
-  </script>
+  <!-- Load Firebase and Auth Logic as Modules -->
+  <script type="module" src="js/firebase.js"></script>
+  <script type="module" src="js/auth.js"></script>
+  <!-- Removed db.js and compat scripts to avoid conflicts -->
 
   <script>
-    // Redirect if already logged in, only load batches if not redirecting
+    // This is a standard script, but it can now call getSession() 
+    // because auth.js attached it to the window.
     window.addEventListener("load", () => {
       const session = getSession();
       if (session) {
