@@ -19,6 +19,7 @@ window.db = db;
 // --- Session Management (Required for Dashboards) ---
 window.getSession = () => JSON.parse(localStorage.getItem("cfp_session"));
 window.logoutUser = () => {
+    console.log("Logging out...");
     localStorage.removeItem("cfp_session");
     window.location.href = "index.html";
 };
@@ -109,12 +110,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Admin Login
     const loginBtn = document.getElementById("loginBtn");
     if (loginBtn) {
+        loginBtn.onclick = null; // Clear any old handlers
         loginBtn.addEventListener("click", async () => {
-            const id = document.getElementById("loginAdminId").value;
-            const pass = document.getElementById("loginPassword").value;
+            const id = document.getElementById("loginAdminId")?.value;
+            const pass = document.getElementById("loginPassword")?.value;
             try {
-                await window.loginUser(id, pass);
-                alert("Login successful ✅");
+                const session = await window.loginUser(id, pass);
                 window.location.href = "dashboard.html";
             } catch (err) {
                 alert(err.message);

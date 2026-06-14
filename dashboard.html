@@ -992,27 +992,27 @@
 
     <div id="toastContainer"></div>
 
-    <script type="module" src="js/firebase.js"></script>
-    <script type="module" src="js/db.js"></script>
-    <script type="module" src="js/auth.js"></script>
+    <script src="js/firebase.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <script type="module">
+    <script>
       window.addEventListener("load", () => {
-        const session = getSession();
+        const session = window.getSession();
         if (!session) { window.location.href = "index.html"; return; }
 
-        window.isAdmin = session.role === "admin";
-        window.userId = session.id;
+        const isAdmin = session.role === "admin";
+        const userId = session.id;
 
         document.getElementById("headerUser").textContent = "Logged in as: " + userId;
         document.getElementById("roleBadge").textContent = isAdmin ? "🛡️ Admin" : "🎒 Student";
-        document.getElementById("studentIdDisplay").textContent = userId;
+        if (document.getElementById("studentIdDisplay")) {
+          document.getElementById("studentIdDisplay").textContent = userId;
+        }
 
-        initApp();
+        initApp(isAdmin, userId);
       });
 
-      function initApp() {
+      function initApp(isAdmin, userId) {
 
         // Show admin sections if admin
         if (isAdmin) {
@@ -1084,9 +1084,9 @@
 
           // show saved home location in input
           if (!isAdmin && data.destination) {
-            document.getElementById("homeAddress").value = data.destination.address || "";
-            document.getElementById("homeLocationText").textContent = data.destination.address || `${data.destination.lat?.toFixed(4)}, ${data.destination.lng?.toFixed(4)}`;
-            document.getElementById("homeLocationSet").style.display = "block";
+            if (document.getElementById("homeAddress")) document.getElementById("homeAddress").value = data.destination.address || "";
+            if (document.getElementById("homeLocationText")) document.getElementById("homeLocationText").textContent = data.destination.address || `${data.destination.lat?.toFixed(4)}, ${data.destination.lng?.toFixed(4)}`;
+            if (document.getElementById("homeLocationSet")) document.getElementById("homeLocationSet").style.display = "block";
           }
         }
 
