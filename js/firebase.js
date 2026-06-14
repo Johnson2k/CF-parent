@@ -32,6 +32,15 @@ window.requireRole = (requiredRole) => {
     return session;
 };
 
+// --- Simple Hash Helper ---
+async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 // --- Unified Login Function ---
 window.loginUser = async (id, password) => {
     console.log("loginUser called for:", id);
@@ -41,12 +50,13 @@ window.loginUser = async (id, password) => {
     }
 
     const cleanId = id.trim().toLowerCase();
+    const hashedInput = await hashPassword(password);
 
     // 1. Try Admin path
     let snapshot = await db.ref("admins/" + cleanId).once("value");
     if (snapshot.exists()) {
         const data = snapshot.val();
-        if (data.password === password) {
+        if (data.password === password || data.password === hashedInput) {
             const session = { id: cleanId, role: "admin" };
             localStorage.setItem("cfp_session", JSON.stringify(session));
             return session;
@@ -59,7 +69,7 @@ window.loginUser = async (id, password) => {
     snapshot = await db.ref("users/" + cleanId).once("value");
     if (snapshot.exists()) {
         const data = snapshot.val();
-        if (data.password === password || data.passwordHash) { // Support both plain and legacy hash
+        if (data.password === password || data.password === hashedInput || data.passwordHash === hashedInput) {
             const session = {
                 id: cleanId,
                 role: data.role || "parent",
@@ -94,7 +104,7 @@ window.registerUser = async (id, password, extraData = {}) => {
 
     const userData = {
         id: cleanId,
-        password: password, // Note: Consider hashing this in the future
+        password: await hashPassword(password),
         role: extraData.role || "parent",
         studentName: extraData.studentName || "",
         batchId: extraData.batchId || "",
