@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CF Parents - Login</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    padding: 20px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  }
+  .logo { text-align: center; margin-bottom: 28px; }
+  .logo h1 { color: #1e3c72; font-size: 28px; font-weight: 800; }
+  .logo p { color: #888; font-size: 13px; margin-top: 4px; }
+
+  /* Role selection */
+  .role-select { display: flex; gap: 14px; margin-bottom: 10px; }
+  .role-btn {
+    flex: 1;
+    padding: 18px 10px;
+    border-radius: 12px;
+    border: 2px solid #e0e0e0;
+    background: #f8f9fb;
+    cursor: pointer;
+    text-align: center;
+    transition: 0.2s;
+  }
+  .role-btn:hover { border-color: #1e3c72; }
+  .role-btn.active { border-color: #1e3c72; background: #eef2fb; }
+  .role-btn .icon { font-size: 32px; margin-bottom: 8px; }
+  .role-btn .label { font-size: 14px; font-weight: 700; color: #1e3c72; }
+  .role-btn .sub { font-size: 11px; color: #999; margin-top: 3px; }
+
+  /* Forms */
+  .panel { display: none; margin-top: 24px; }
+  .panel.active { display: block; }
+
+  .tabs { display: flex; margin-bottom: 20px; border-radius: 10px; overflow: hidden; border: 1px solid #ddd; }
+  .tab { flex: 1; text-align: center; padding: 11px; cursor: pointer; font-weight: 600; color: #888; background: #f5f5f5; transition: 0.2s; font-size: 14px; }
+  .tab.active { background: #1e3c72; color: #fff; }
+
+  .form { display: none; }
+  .form.active { display: block; }
+
+  label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px; margin-top: 14px; }
+  input {
+    width: 100%; padding: 12px; border: 1px solid #ddd;
+    border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s;
+  }
+  input:focus { border-color: #1e3c72; }
+  select {
+    width: 100%; padding: 12px; border: 1px solid #ddd;
+    border-radius: 8px; font-size: 14px; outline: none; background: #fff; color: #333;
+  }
+  select:focus { border-color: #1e3c72; }
+
+  button.submit {
+    width: 100%; margin-top: 20px; padding: 13px;
+    background: #1e3c72; color: #fff; border: none;
+    border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; transition: 0.2s;
+  }
+  button.submit:hover { background: #16305c; }
+
+  .msg { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 13px; text-align: center; display: none; }
+  .msg.error { background: #fdecea; color: #c0392b; display: block; }
+  .msg.success { background: #eafaf1; color: #27ae60; display: block; }
+  .role-note { font-size: 12px; color: #999; margin-top: 4px; }
+
+  .back-btn {
+    background: none; border: none; color: #888; font-size: 13px;
+    cursor: pointer; margin-top: 16px; display: block; width: 100%; text-align: center;
+  }
+  .back-btn:hover { color: #1e3c72; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">
+    <h1>CF Parents</h1>
+    <p>Hostel Student Tracking System</p>
+  </div>
+
+  <!-- ROLE SELECTION -->
+  <div id="roleSelect">
+    <div class="role-select">
+      <div class="role-btn" onclick="selectRole('admin')">
+        <div class="icon">🛡️</div>
+        <div class="label">Admin</div>
+        <div class="sub">Foundation staff</div>
+      </div>
+      <div class="role-btn" onclick="selectRole('student')">
+        <div class="icon">🎒</div>
+        <div class="label">Student / Parent</div>
+        <div class="sub">Login or Register</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN PANEL (login + register tabs) -->
+  <div class="panel" id="adminPanel">
+    <div class="tabs">
+      <div class="tab active" data-tab="adminLogin">Login</div>
+      <div class="tab" data-tab="adminRegister">Register</div>
+    </div>
+
+    <!-- Admin Login -->
+    <div class="form active" id="adminLoginForm">
+      <label>Admin ID</label>
+      <input type="text" id="adminLoginId" placeholder="Enter your admin ID" autocomplete="off">
+      <label>Password</label>
+      <input type="password" id="adminLoginPassword" placeholder="Enter your password">
+      <button class="submit" onclick="handleAdminLogin()">Login as Admin</button>
+      <div class="msg" id="adminLoginMsg"></div>
+    </div>
+
+    <!-- Admin Register -->
+    <div class="form" id="adminRegisterForm">
+      <label>Admin ID</label>
+      <input type="text" id="adminRegId" placeholder="e.g. cf_admin01" autocomplete="off">
+      <label>Password</label>
+      <input type="password" id="adminRegPassword" placeholder="Minimum 4 characters">
+      <label>Confirm Password</label>
+      <input type="password" id="adminRegConfirmPassword" placeholder="Re-enter password">
+      <button class="submit" onclick="handleAdminRegister()">Register as Admin</button>
+      <div class="msg" id="adminRegMsg"></div>
+    </div>
+
+    <button class="back-btn" onclick="goBack()">← Back</button>
+  </div>
+
+  <!-- STUDENT PANEL (login + register tabs) -->
+  <div class="panel" id="studentPanel">
+    <div class="tabs">
+      <div class="tab active" data-tab="studentLogin">Login</div>
+      <div class="tab" data-tab="studentRegister">Register</div>
+    </div>
+
+    <!-- Student Login -->
+    <div class="form active" id="studentLoginForm">
+      <label>Your ID</label>
+      <input type="text" id="stuLoginId" placeholder="Enter your ID" autocomplete="off">
+      <label>Password</label>
+      <input type="password" id="stuLoginPassword" placeholder="Enter your password">
+      <button class="submit" onclick="handleStudentLogin()">Login</button>
+      <div class="msg" id="stuLoginMsg"></div>
+    </div>
+
+    <!-- Student Register -->
+    <div class="form" id="studentRegisterForm">
+      <label>Choose a Unique ID</label>
+      <input type="text" id="regId" placeholder="e.g. john_2026" autocomplete="off">
+      <div class="role-note">Used for login — pick something memorable.</div>
+      <label>Student Name</label>
+      <input type="text" id="regStudentName" placeholder="Full name of student">
+      <label>Select Batch</label>
+      <select id="regBatchId">
+        <option value="">Loading batches...</option>
+      </select>
+      <label>Password</label>
+      <input type="password" id="regPassword" placeholder="Minimum 4 characters">
+      <label>Confirm Password</label>
+      <input type="password" id="regConfirmPassword" placeholder="Re-enter password">
+      <button class="submit" onclick="handleRegister()">Register</button>
+      <div class="msg" id="registerMsg"></div>
+    </div>
+
+    <button class="back-btn" onclick="goBack()">← Back</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+
+<script>
+// Redirect if already logged in, only load batches if not redirecting
+window.addEventListener("DOMContentLoaded", () => {
+  const session = getSession();
+  if (session) {
+    window.location.href = "dashboard.html"; return;
+  }
+  loadBatches();
+});
+
+function loadBatches() {
+  db.ref("batches").once("value").then(snapshot => {
+    const select = document.getElementById("regBatchId");
+    const batches = snapshot.val() || {};
+    const active = Object.values(batches).filter(b => b.status === "active");
+    if (active.length === 0) {
+      select.innerHTML = '<option value="">No batches available</option>';
+    } else {
+      select.innerHTML = '<option value="">-- Select your batch --</option>' +
+        active.map(b => `<option value="${b.id}">${b.id}</option>`).join("");
+    }
+  });
+}
+
+function selectRole(role) {
+  document.getElementById("roleSelect").style.display = "none";
+  document.getElementById(role === "admin" ? "adminPanel" : "studentPanel").classList.add("active");
+}
+
+function goBack() {
+  document.getElementById("adminPanel").classList.remove("active");
+  document.getElementById("studentPanel").classList.remove("active");
+  document.getElementById("roleSelect").style.display = "block";
+}
+
+// Admin tab switching
+document.querySelectorAll("#adminPanel .tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll("#adminPanel .tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll("#adminPanel .form").forEach(f => f.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById(tab.dataset.tab + "Form").classList.add("active");
+  });
+});
+
+// Student tab switching
+document.querySelectorAll("#studentPanel .tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll("#studentPanel .tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll("#studentPanel .form").forEach(f => f.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById(tab.dataset.tab + "Form").classList.add("active");
+  });
+});
+
+function showMsg(elId, text, type) {
+  const el = document.getElementById(elId);
+  el.textContent = text;
+  el.className = "msg " + type;
+}
+
+async function handleAdminRegister() {
+  const id = document.getElementById("adminRegId").value;
+  const password = document.getElementById("adminRegPassword").value;
+  const confirmPassword = document.getElementById("adminRegConfirmPassword").value;
+  if (!id || !password || !confirmPassword) { showMsg("adminRegMsg", "Please fill all fields.", "error"); return; }
+  if (password !== confirmPassword) { showMsg("adminRegMsg", "Passwords do not match.", "error"); return; }
+  try {
+    await registerUser(id, password, { role: "admin" });
+    showMsg("adminRegMsg", "Admin account created! You can now login.", "success");
+    setTimeout(() => {
+      document.querySelector('[data-tab="adminLogin"]').click();
+      document.getElementById("adminLoginId").value = id;
+    }, 1000);
+  } catch (err) {
+    showMsg("adminRegMsg", err.message, "error");
+  }
+}
+
+async function handleAdminLogin() {
+  const id = document.getElementById("adminLoginId").value;
+  const password = document.getElementById("adminLoginPassword").value;
+  if (!id || !password) { showMsg("adminLoginMsg", "Please enter both ID and password.", "error"); return; }
+  try {
+    const user = await loginUser(id, password);
+    if (user.role !== "admin") { showMsg("adminLoginMsg", "This account is not an admin.", "error"); return; }
+    showMsg("adminLoginMsg", "Login successful! Redirecting...", "success");
+    setTimeout(() => window.location.href = "dashboard.html", 600);
+  } catch (err) {
+    showMsg("adminLoginMsg", err.message, "error");
+  }
+}
+
+async function handleStudentLogin() {
+  const id = document.getElementById("stuLoginId").value;
+  const password = document.getElementById("stuLoginPassword").value;
+  if (!id || !password) { showMsg("stuLoginMsg", "Please enter both ID and password.", "error"); return; }
+  try {
+    const user = await loginUser(id, password);
+    if (user.role !== "parent") { showMsg("stuLoginMsg", "This account is not a student account.", "error"); return; }
+    showMsg("stuLoginMsg", "Login successful! Redirecting...", "success");
+    setTimeout(() => window.location.href = "dashboard.html", 600);
+  } catch (err) {
+    showMsg("stuLoginMsg", err.message, "error");
+  }
+}
+
+async function handleRegister() {
+  const id = document.getElementById("regId").value;
+  const studentName = document.getElementById("regStudentName").value;
+  const batchId = document.getElementById("regBatchId").value;
+  const password = document.getElementById("regPassword").value;
+  const confirmPassword = document.getElementById("regConfirmPassword").value;
+
+  if (!id || !studentName || !batchId || !password || !confirmPassword) {
+    showMsg("registerMsg", "Please fill all fields.", "error"); return;
+  }
+  if (password !== confirmPassword) {
+    showMsg("registerMsg", "Passwords do not match.", "error"); return;
+  }
+
+  try {
+    await registerUser(id, password, { role: "parent", studentName, batchId });
+    const studentId = id.trim().toLowerCase();
+    await db.ref("students/" + studentId).set({
+      id: studentId, name: studentName, batchId,
+      parentUserId: studentId, status: "in_hostel",
+      destination: null, currentLocation: null,
+      journeyStartTime: null, journeyEndTime: null,
+      lastUpdated: Date.now()
+    });
+    showMsg("registerMsg", "Registration successful! You can now login.", "success");
+    setTimeout(() => {
+      document.querySelector('[data-tab="studentLogin"]').click();
+      document.getElementById("stuLoginId").value = id;
+    }, 1000);
+  } catch (err) {
+    showMsg("registerMsg", err.message, "error");
+  }
+}
+</script>
+
+</body>
+</html>
