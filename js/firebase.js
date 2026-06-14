@@ -14,6 +14,42 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
+function loginUser() {
+    console.log("loginUser called");
+
+    const adminId = document.getElementById("loginAdminId").value;
+    const password = document.getElementById("loginPassword").value;
+
+    if (!adminId || !password) {
+        alert("Enter all fields");
+        return;
+    }
+
+    firebase.database().ref("admins/" + adminId).once("value")
+        .then(snapshot => {
+            if (!snapshot.exists()) {
+                alert("Admin not found ❌");
+                return;
+            }
+
+            const data = snapshot.val();
+            console.log("Fetched Data:", data);
+
+            if (data.password === password) {
+                alert("Login successful ✅");
+                // Save session for the dashboard route guard
+                localStorage.setItem("cfp_session", JSON.stringify({ id: adminId, role: "admin" }));
+                window.location.href = "dashboard.html";
+            } else {
+                alert("Wrong password ❌");
+            }
+        })
+        .catch(error => {
+            console.error(error);
+            alert(error.message);
+        });
+}
+
 function registerUser() {
     console.log("registerUser called");
 
@@ -42,10 +78,16 @@ function registerUser() {
 
 // Ensure function is globally accessible
 window.registerUser = registerUser;
+window.loginUser = loginUser;
 
 document.addEventListener("DOMContentLoaded", () => {
     const registerBtn = document.getElementById("registerBtn");
     if (registerBtn) {
         registerBtn.addEventListener("click", registerUser);
+    }
+
+    const loginBtn = document.getElementById("loginBtn");
+    if (loginBtn) {
+        loginBtn.addEventListener("click", loginUser);
     }
 });
