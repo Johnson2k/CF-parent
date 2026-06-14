@@ -992,330 +992,339 @@
 
     <div id="toastContainer"></div>
 
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-    <script src="js/firebase-config.js"></script>
-    <script src="js/auth.js"></script>
+    <script type="module" src="js/firebase.js"></script>
+    <script type="module" src="js/db.js"></script>
+    <script type="module" src="js/auth.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <script>
-      // ─── Session ───────────────────────────────────────────────
-      const session = getSession();
-      if (!session) { window.location.href = "index.html"; }
+    <script type="module">
+      window.addEventListener("load", () => {
+        const session = getSession();
+        if (!session) { window.location.href = "index.html"; return; }
 
-      const isAdmin = session.role === "admin";
-      const userId = session.id;
+        window.isAdmin = session.role === "admin";
+        window.userId = session.id;
 
-      document.getElementById("headerUser").textContent = "Logged in as: " + userId;
-      document.getElementById("roleBadge").textContent = isAdmin ? "🛡️ Admin" : "🎒 Student";
-      document.getElementById("studentIdDisplay").textContent = userId;
+        document.getElementById("headerUser").textContent = "Logged in as: " + userId;
+        document.getElementById("roleBadge").textContent = isAdmin ? "🛡️ Admin" : "🎒 Student";
+        document.getElementById("studentIdDisplay").textContent = userId;
 
-      // Show admin sections if admin
-      if (isAdmin) {
-        document.getElementById("adminDivider").style.display = "block";
-        document.getElementById("statsSection").style.display = "grid";
-        document.getElementById("hostelLocationSection").style.display = "block";
-        document.getElementById("batchSection").style.display = "block";
-        document.getElementById("studentsSection").style.display = "block";
-        document.getElementById("homeLocationSection").style.display = "none"; // admin has no home location
-      }
-
-      // ─── Shared helpers ─────────────────────────────────────────
-      function statusLabel(s) {
-        return { in_hostel: "In Hostel", on_way: "On the Way", reached: "Reached" }[s] || s;
-      }
-
-      function esc(str) {
-        const d = document.createElement('div');
-        d.textContent = str || '';
-        return d.innerHTML;
-      }
-
-      // ─── STUDENT dashboard ──────────────────────────────────────
-      let currentStudentData = {};
-
-      const statusConfig = {
-        in_hostel: { icon: "🏠", title: "In Hostel", sub: "You are currently at the hostel", badge: "In Hostel" },
-        on_way: { icon: "🚶", title: "On the Way", sub: "Your live location is being shared", badge: "On the Way" },
-        reached: { icon: "✅", title: "Reached Destination", sub: "You have arrived at your destination", badge: "Reached" }
-      };
-
-      // For admin: listen to their own student record if it exists, else just show profile
-      const myStudentId = userId;
-
-      db.ref("students/" + myStudentId).on("value", (snap) => {
-        const data = snap.val();
-        if (!data) {
-          // admin may not have a student record — show basic profile
-          document.getElementById("studentName").textContent = userId;
-          document.getElementById("avatarLetter").textContent = userId.charAt(0).toUpperCase();
-          document.getElementById("batchId").textContent = isAdmin ? "Admin" : "—";
-          return;
-        }
-        currentStudentData = data;
-        renderStudentDashboard(data);
+        initApp();
       });
 
-      function renderStudentDashboard(data) {
-        document.getElementById("studentName").textContent = data.name;
-        document.getElementById("avatarLetter").textContent = data.name.charAt(0).toUpperCase();
-        document.getElementById("batchId").textContent = data.batchId;
+      function initApp() {
 
-        const cfg = statusConfig[data.status] || statusConfig.in_hostel;
-        const card = document.getElementById("statusCard");
-        card.className = "status-card " + data.status;
-        document.getElementById("statusIcon").textContent = cfg.icon;
-        document.getElementById("statusTitle").textContent = cfg.title;
-        document.getElementById("statusSub").textContent = cfg.sub;
-        const badge = document.getElementById("statusBadge");
-        badge.className = "badge " + data.status;
-        badge.textContent = cfg.badge;
-
-        document.getElementById("lastUpdated").textContent = data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : "—";
-        document.getElementById("journeyStart").textContent = data.journeyStartTime ? new Date(data.journeyStartTime).toLocaleString() : "—";
-        document.getElementById("journeyEnd").textContent = data.journeyEndTime ? new Date(data.journeyEndTime).toLocaleString() : "—";
-        document.getElementById("destInfo").textContent = data.destination
-          ? (data.destination.address || `${data.destination.lat?.toFixed(4)}, ${data.destination.lng?.toFixed(4)}`)
-          : "Not set";
-
-        // show saved home location in input
-        if (!isAdmin && data.destination) {
-          document.getElementById("homeAddress").value = data.destination.address || "";
-          document.getElementById("homeLocationText").textContent = data.destination.address || `${data.destination.lat?.toFixed(4)}, ${data.destination.lng?.toFixed(4)}`;
-          document.getElementById("homeLocationSet").style.display = "block";
-        }
-      }
-
-      // ─── Pick on Map ─────────────────────────────────────────────
-      const pickMaps = {};
-
-      function togglePickMap(type) {
-        const mapEl = document.getElementById(type + 'PickMap');
-        const hint = document.getElementById(type + 'PickHint');
-        const search = document.getElementById(type + 'SearchRow');
-        const isOpen = mapEl.classList.contains('open');
-
-        if (isOpen) {
-          mapEl.classList.remove('open');
-          hint.classList.remove('open');
-          search.classList.remove('open');
-          document.getElementById(type + 'SearchResults').classList.remove('open');
-          return;
+        // Show admin sections if admin
+        if (isAdmin) {
+          document.getElementById("adminDivider").style.display = "block";
+          document.getElementById("statsSection").style.display = "grid";
+          document.getElementById("hostelLocationSection").style.display = "block";
+          document.getElementById("batchSection").style.display = "block";
+          document.getElementById("studentsSection").style.display = "block";
+          document.getElementById("homeLocationSection").style.display = "none"; // admin has no home location
         }
 
-        mapEl.classList.add('open');
-        hint.classList.add('open');
-        search.classList.add('open');
-
-        if (pickMaps[type]) {
-          setTimeout(() => pickMaps[type].invalidateSize(), 100);
-          return;
+        // ─── Shared helpers ─────────────────────────────────────────
+        function statusLabel(s) {
+          return { in_hostel: "In Hostel", on_way: "On the Way", reached: "Reached" }[s] || s;
         }
 
-        const m = L.map(mapEl).setView([13.0827, 80.2707], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(m);
+        function esc(str) {
+          const d = document.createElement('div');
+          d.textContent = str || '';
+          return d.innerHTML;
+        }
 
-        let pickedMarker = null;
+        // ─── STUDENT dashboard ──────────────────────────────────────
+        let currentStudentData = {};
 
-        m.on('click', async (e) => {
-          const { lat, lng } = e.latlng;
-          if (pickedMarker) m.removeLayer(pickedMarker);
-          pickedMarker = L.marker([lat, lng]).addTo(m).bindPopup('📍 Location selected').openPopup();
-          const address = type === 'home'
-            ? (document.getElementById('homeAddress').value || 'Home (Map Pick)')
-            : (document.getElementById('hostelAddress').value || 'Hostel (Map Pick)');
-          await savePickedLocation(type, lat, lng, address);
+        const statusConfig = {
+          in_hostel: { icon: "🏠", title: "In Hostel", sub: "You are currently at the hostel", badge: "In Hostel" },
+          on_way: { icon: "🚶", title: "On the Way", sub: "Your live location is being shared", badge: "On the Way" },
+          reached: { icon: "✅", title: "Reached Destination", sub: "You have arrived at your destination", badge: "Reached" }
+        };
+
+        // For admin: listen to their own student record if it exists, else just show profile
+        const myStudentId = userId;
+
+        db.ref("students/" + myStudentId).on("value", (snap) => {
+          const data = snap.val();
+          if (!data) {
+            // admin may not have a student record — show basic profile
+            document.getElementById("studentName").textContent = userId;
+            document.getElementById("avatarLetter").textContent = userId.charAt(0).toUpperCase();
+            document.getElementById("batchId").textContent = isAdmin ? "Admin" : "—";
+            return;
+          }
+          currentStudentData = data;
+          renderStudentDashboard(data);
         });
 
-        pickMaps[type] = m;
-        setTimeout(() => m.invalidateSize(), 200);
-      }
+        function renderStudentDashboard(data) {
+          document.getElementById("studentName").textContent = data.name;
+          document.getElementById("avatarLetter").textContent = data.name.charAt(0).toUpperCase();
+          document.getElementById("batchId").textContent = data.batchId;
 
-      async function savePickedLocation(type, lat, lng, address) {
-        if (type === 'home') {
-          await db.ref('students/' + userId).update({
-            destination: { lat, lng, address }, lastUpdated: Date.now()
-          });
-          document.getElementById('homeLocationText').textContent = address + ` (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-          document.getElementById('homeLocationSet').style.display = 'block';
-          showLocMsg('homeLocMsg', 'Home location set from map!', 'success');
-        } else {
-          await db.ref('hostel').set({ lat, lng, address });
-          document.getElementById('hostelLocationText').textContent = address + ` (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-          document.getElementById('hostelLocationSet').style.display = 'block';
-          showLocMsg('hostelLocMsg', 'Hostel location set from map!', 'success');
+          const cfg = statusConfig[data.status] || statusConfig.in_hostel;
+          const card = document.getElementById("statusCard");
+          card.className = "status-card " + data.status;
+          document.getElementById("statusIcon").textContent = cfg.icon;
+          document.getElementById("statusTitle").textContent = cfg.title;
+          document.getElementById("statusSub").textContent = cfg.sub;
+          const badge = document.getElementById("statusBadge");
+          badge.className = "badge " + data.status;
+          badge.textContent = cfg.badge;
+
+          document.getElementById("lastUpdated").textContent = data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : "—";
+          document.getElementById("journeyStart").textContent = data.journeyStartTime ? new Date(data.journeyStartTime).toLocaleString() : "—";
+          document.getElementById("journeyEnd").textContent = data.journeyEndTime ? new Date(data.journeyEndTime).toLocaleString() : "—";
+          document.getElementById("destInfo").textContent = data.destination
+            ? (data.destination.address || `${data.destination.lat?.toFixed(4)}, ${data.destination.lng?.toFixed(4)}`)
+            : "Not set";
+
+          // show saved home location in input
+          if (!isAdmin && data.destination) {
+            document.getElementById("homeAddress").value = data.destination.address || "";
+            document.getElementById("homeLocationText").textContent = data.destination.address || `${data.destination.lat?.toFixed(4)}, ${data.destination.lng?.toFixed(4)}`;
+            document.getElementById("homeLocationSet").style.display = "block";
+          }
         }
-      }
 
-      async function searchPlace(type) {
-        const input = document.getElementById(type + 'SearchInput').value.trim();
-        if (!input) return;
-        const resultsEl = document.getElementById(type + 'SearchResults');
-        resultsEl.innerHTML = '<div class="map-search-item">Searching...</div>';
-        resultsEl.classList.add('open');
+        // ─── Pick on Map ─────────────────────────────────────────────
+        const pickMaps = {};
 
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(input)}&format=json&limit=5`);
-          const data = await res.json();
+        function togglePickMap(type) {
+          const mapEl = document.getElementById(type + 'PickMap');
+          const hint = document.getElementById(type + 'PickHint');
+          const search = document.getElementById(type + 'SearchRow');
+          const isOpen = mapEl.classList.contains('open');
 
-          if (!data.length) {
-            resultsEl.innerHTML = '<div class="map-search-item">No results found.</div>';
+          if (isOpen) {
+            mapEl.classList.remove('open');
+            hint.classList.remove('open');
+            search.classList.remove('open');
+            document.getElementById(type + 'SearchResults').classList.remove('open');
             return;
           }
 
-          resultsEl.innerHTML = data.map((r, i) =>
-            `<div class="map-search-item" onclick="selectSearchResult('${type}', ${r.lat}, ${r.lon}, '${esc(r.display_name.replace(/'/g, "\\'"))}', ${i})">${esc(r.display_name)}</div>`
-          ).join('');
+          mapEl.classList.add('open');
+          hint.classList.add('open');
+          search.classList.add('open');
 
-          // store results for click handler
-          resultsEl._results = data;
-        } catch {
-          resultsEl.innerHTML = '<div class="map-search-item">Search failed. Check connection.</div>';
+          if (pickMaps[type]) {
+            setTimeout(() => pickMaps[type].invalidateSize(), 100);
+            return;
+          }
+
+          const m = L.map(mapEl).setView([13.0827, 80.2707], 13);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+          }).addTo(m);
+
+          let pickedMarker = null;
+
+          m.on('click', async (e) => {
+            const { lat, lng } = e.latlng;
+            if (pickedMarker) m.removeLayer(pickedMarker);
+            pickedMarker = L.marker([lat, lng]).addTo(m).bindPopup('📍 Location selected').openPopup();
+            const address = type === 'home'
+              ? (document.getElementById('homeAddress').value || 'Home (Map Pick)')
+              : (document.getElementById('hostelAddress').value || 'Hostel (Map Pick)');
+            await savePickedLocation(type, lat, lng, address);
+          });
+
+          pickMaps[type] = m;
+          setTimeout(() => m.invalidateSize(), 200);
         }
-      }
 
-      async function selectSearchResult(type, lat, lng, displayName, idx) {
-        lat = parseFloat(lat); lng = parseFloat(lng);
-        const m = pickMaps[type];
-        if (!m) return;
+        async function savePickedLocation(type, lat, lng, address) {
+          if (type === 'home') {
+            await db.ref('students/' + userId).update({
+              destination: { lat, lng, address }, lastUpdated: Date.now()
+            });
+            document.getElementById('homeLocationText').textContent = address + ` (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+            document.getElementById('homeLocationSet').style.display = 'block';
+            showLocMsg('homeLocMsg', 'Home location set from map!', 'success');
+          } else {
+            await db.ref('hostel').set({ lat, lng, address });
+            document.getElementById('hostelLocationText').textContent = address + ` (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+            document.getElementById('hostelLocationSet').style.display = 'block';
+            showLocMsg('hostelLocMsg', 'Hostel location set from map!', 'success');
+          }
+        }
 
-        m.setView([lat, lng], 16);
+        async function searchPlace(type) {
+          const input = document.getElementById(type + 'SearchInput').value.trim();
+          if (!input) return;
+          const resultsEl = document.getElementById(type + 'SearchResults');
+          resultsEl.innerHTML = '<div class="map-search-item">Searching...</div>';
+          resultsEl.classList.add('open');
 
-        // simulate a click to drop marker and save
-        const addressInput = document.getElementById(type === 'home' ? 'homeAddress' : 'hostelAddress');
-        addressInput.value = displayName;
-        await savePickedLocation(type, lat, lng, displayName);
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(input)}&format=json&limit=5`);
+            const data = await res.json();
 
-        // add marker
-        L.marker([lat, lng]).addTo(m).bindPopup('📍 ' + displayName).openPopup();
+            if (!data.length) {
+              resultsEl.innerHTML = '<div class="map-search-item">No results found.</div>';
+              return;
+            }
 
-        // close results
-        document.getElementById(type + 'SearchResults').classList.remove('open');
-      }
+            resultsEl.innerHTML = data.map((r, i) =>
+              `<div class="map-search-item" onclick="selectSearchResult('${type}', ${r.lat}, ${r.lon}, '${esc(r.display_name.replace(/'/g, "\\'"))}', ${i})">${esc(r.display_name)}</div>`
+            ).join('');
 
-      // ─── Student: Home Location ───────────────────────────────────
-      function showLocMsg(id, text, type) {
-        const el = document.getElementById(id);
-        el.textContent = text;
-        el.className = "loc-msg " + type;
-      }
+            // store results for click handler
+            resultsEl._results = data;
+          } catch {
+            resultsEl.innerHTML = '<div class="map-search-item">Search failed. Check connection.</div>';
+          }
+        }
 
-      async function pinHomeLocation() {
-        showLocMsg("homeLocMsg", "Getting your location...", "info");
-        if (!navigator.geolocation) { showLocMsg("homeLocMsg", "Geolocation not supported.", "error"); return; }
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-          const address = document.getElementById("homeAddress").value || "Home (Pinned)";
+        async function selectSearchResult(type, lat, lng, displayName, idx) {
+          lat = parseFloat(lat); lng = parseFloat(lng);
+          const m = pickMaps[type];
+          if (!m) return;
+
+          m.setView([lat, lng], 16);
+
+          // simulate a click to drop marker and save
+          const addressInput = document.getElementById(type === 'home' ? 'homeAddress' : 'hostelAddress');
+          addressInput.value = displayName;
+          await savePickedLocation(type, lat, lng, displayName);
+
+          // add marker
+          L.marker([lat, lng]).addTo(m).bindPopup('📍 ' + displayName).openPopup();
+
+          // close results
+          document.getElementById(type + 'SearchResults').classList.remove('open');
+        }
+
+        // ─── Student: Home Location ───────────────────────────────────
+        function showLocMsg(id, text, type) {
+          const el = document.getElementById(id);
+          el.textContent = text;
+          el.className = "loc-msg " + type;
+        }
+
+        async function pinHomeLocation() {
+          showLocMsg("homeLocMsg", "Getting your location...", "info");
+          if (!navigator.geolocation) { showLocMsg("homeLocMsg", "Geolocation not supported.", "error"); return; }
+          navigator.geolocation.getCurrentPosition(async (pos) => {
+            const address = document.getElementById("homeAddress").value || "Home (Pinned)";
+            await db.ref("students/" + userId).update({
+              destination: { lat: pos.coords.latitude, lng: pos.coords.longitude, address },
+              lastUpdated: Date.now()
+            });
+            showLocMsg("homeLocMsg", "Home location pinned!", "success");
+          }, () => showLocMsg("homeLocMsg", "Could not get location.", "error"), { enableHighAccuracy: true });
+        }
+
+        async function saveHomeAddress() {
+          const address = document.getElementById("homeAddress").value.trim();
+          if (!address) { showLocMsg("homeLocMsg", "Please enter an address.", "error"); return; }
+          const existing = (await db.ref("students/" + userId + "/destination").once("value")).val() || {};
           await db.ref("students/" + userId).update({
-            destination: { lat: pos.coords.latitude, lng: pos.coords.longitude, address },
+            destination: { ...existing, address },
             lastUpdated: Date.now()
           });
-          showLocMsg("homeLocMsg", "Home location pinned!", "success");
-        }, () => showLocMsg("homeLocMsg", "Could not get location.", "error"), { enableHighAccuracy: true });
-      }
-
-      async function saveHomeAddress() {
-        const address = document.getElementById("homeAddress").value.trim();
-        if (!address) { showLocMsg("homeLocMsg", "Please enter an address.", "error"); return; }
-        const existing = (await db.ref("students/" + userId + "/destination").once("value")).val() || {};
-        await db.ref("students/" + userId).update({
-          destination: { ...existing, address },
-          lastUpdated: Date.now()
-        });
-        showLocMsg("homeLocMsg", "Home address saved!", "success");
-      }
-
-      // ─── ADMIN functions ─────────────────────────────────────────
-      if (isAdmin) {
-        let allStudents = {};
-        let allBatches = {};
-
-        // Load existing hostel location
-        db.ref("hostel").once("value").then(snap => {
-          const h = snap.val();
-          if (h) {
-            const txt = h.address || `${h.lat?.toFixed(4)}, ${h.lng?.toFixed(4)}`;
-            document.getElementById("hostelAddress").value = h.address || "";
-            document.getElementById("hostelLocationText").textContent = txt;
-            document.getElementById("hostelLocationSet").style.display = "block";
-          }
-        });
-
-        window.pinHostelLocation = function () {
-          showLocMsg("hostelLocMsg", "Getting location...", "info");
-          if (!navigator.geolocation) { showLocMsg("hostelLocMsg", "Geolocation not supported.", "error"); return; }
-          navigator.geolocation.getCurrentPosition(async (pos) => {
-            const address = document.getElementById("hostelAddress").value || "Hostel (Pinned)";
-            await db.ref("hostel").set({ lat: pos.coords.latitude, lng: pos.coords.longitude, address });
-            showLocMsg("hostelLocMsg", "Hostel location pinned!", "success");
-            document.getElementById("hostelLocationText").textContent = address;
-            document.getElementById("hostelLocationSet").style.display = "block";
-          }, () => showLocMsg("hostelLocMsg", "Could not get location.", "error"), { enableHighAccuracy: true });
-        };
-
-        window.saveHostelAddress = async function () {
-          const address = document.getElementById("hostelAddress").value.trim();
-          if (!address) { showLocMsg("hostelLocMsg", "Please enter an address.", "error"); return; }
-          const existing = (await db.ref("hostel").once("value")).val() || {};
-          await db.ref("hostel").set({ ...existing, address });
-          showLocMsg("hostelLocMsg", "Hostel address saved!", "success");
-          document.getElementById("hostelLocationText").textContent = address;
-          document.getElementById("hostelLocationSet").style.display = "block";
-        };
-
-        let previousStudents = null;
-        db.ref("students").on("value", (snap) => {
-          const data = snap.val() || {};
-
-          if (previousStudents) {
-            for (let id in data) {
-              if (previousStudents[id] && data[id] && previousStudents[id].status !== data[id].status) {
-                notifyStatusChange(data[id]);
-              }
-            }
-          }
-          previousStudents = JSON.parse(JSON.stringify(data));
-          allStudents = data;
-          updateStats();
-          renderStudents();
-          populateBatchFilter();
-        });
-
-        db.ref("batches").on("value", (snap) => {
-          allBatches = snap.val() || {};
-          renderBatches();
-          populateBatchFilter();
-        });
-
-        function updateStats() {
-          const s = Object.values(allStudents);
-          document.getElementById("statTotal").textContent = s.length;
-          document.getElementById("statInHostel").textContent = s.filter(x => x.status === "in_hostel").length;
-          document.getElementById("statOnWay").textContent = s.filter(x => x.status === "on_way").length;
-          document.getElementById("statReached").textContent = s.filter(x => x.status === "reached").length;
+          showLocMsg("homeLocMsg", "Home address saved!", "success");
         }
 
-        function renderStudents() {
-          const grid = document.getElementById("studentsGrid");
-          const batch = document.getElementById("batchFilter").value;
-          const status = document.getElementById("statusFilter").value;
-          let students = Object.values(allStudents);
-          if (batch) students = students.filter(s => s.batchId === batch);
-          if (status) students = students.filter(s => s.status === status);
+        // ─── ADMIN functions ─────────────────────────────────────────
+        if (isAdmin) {
+          let allStudents = {};
+          let allBatches = {};
 
-          if (students.length === 0) {
-            grid.innerHTML = '<div class="empty">No students found.</div>'; return;
+          // Load existing hostel location
+          db.ref("hostel").once("value").then(snap => {
+            const h = snap.val();
+            if (h) {
+              const txt = h.address || `${h.lat?.toFixed(4)}, ${h.lng?.toFixed(4)}`;
+              document.getElementById("hostelAddress").value = h.address || "";
+              document.getElementById("hostelLocationText").textContent = txt;
+              document.getElementById("hostelLocationSet").style.display = "block";
+            }
+          });
+
+          window.pinHostelLocation = function () {
+            showLocMsg("hostelLocMsg", "Getting location...", "info");
+            if (!navigator.geolocation) { showLocMsg("hostelLocMsg", "Geolocation not supported.", "error"); return; }
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+              const address = document.getElementById("hostelAddress").value || "Hostel (Pinned)";
+              await db.ref("hostel").set({ lat: pos.coords.latitude, lng: pos.coords.longitude, address });
+              showLocMsg("hostelLocMsg", "Hostel location pinned!", "success");
+              document.getElementById("hostelLocationText").textContent = address;
+              document.getElementById("hostelLocationSet").style.display = "block";
+            }, () => showLocMsg("hostelLocMsg", "Could not get location.", "error"), { enableHighAccuracy: true });
+          };
+
+          window.saveHostelAddress = async function () {
+            const address = document.getElementById("hostelAddress").value.trim();
+            if (!address) { showLocMsg("hostelLocMsg", "Please enter an address.", "error"); return; }
+            const existing = (await db.ref("hostel").once("value")).val() || {};
+            await db.ref("hostel").set({ ...existing, address });
+            showLocMsg("hostelLocMsg", "Hostel address saved!", "success");
+            document.getElementById("hostelLocationText").textContent = address;
+            document.getElementById("hostelLocationSet").style.display = "block";
+          };
+
+          let previousStudents = null;
+          db.ref("students").on("value", (snap) => {
+            const data = snap.val() || {};
+
+            if (previousStudents) {
+              for (let id in data) {
+                if (previousStudents[id] && data[id] && previousStudents[id].status !== data[id].status) {
+                  notifyStatusChange(data[id]);
+                }
+              }
+            }
+            previousStudents = JSON.parse(JSON.stringify(data));
+            allStudents = data;
+            updateStats();
+            renderStudents();
+            populateBatchFilter();
+          }, (error) => {
+            console.error("Firebase Student Read Error:", error);
+            alert("Database Error: " + error.message);
+          });
+
+          db.ref("batches").on("value", (snap) => {
+            allBatches = snap.val() || {};
+            renderBatches();
+            populateBatchFilter();
+          }, (error) => {
+            console.error("Firebase Batch Read Error:", error);
+          });
+
+          function updateStats() {
+            const s = Object.values(allStudents);
+            document.getElementById("statTotal").textContent = s.length;
+            document.getElementById("statInHostel").textContent = s.filter(x => x.status === "in_hostel").length;
+            document.getElementById("statOnWay").textContent = s.filter(x => x.status === "on_way").length;
+            document.getElementById("statReached").textContent = s.filter(x => x.status === "reached").length;
           }
 
-          const statusIcon = { in_hostel: '🏠', on_way: '🚶', reached: '✅' };
+          function renderStudents() {
+            const grid = document.getElementById("studentsGrid");
+            const batch = document.getElementById("batchFilter").value;
+            const status = document.getElementById("statusFilter").value;
+            let students = Object.values(allStudents);
+            if (batch) students = students.filter(s => s.batchId === batch);
+            if (status) students = students.filter(s => s.status === status);
 
-          grid.innerHTML = students.map(s => {
-            const dest = s.destination ? (s.destination.address || `${s.destination.lat?.toFixed(4)}, ${s.destination.lng?.toFixed(4)}`) : null;
-            const updated = s.lastUpdated ? new Date(s.lastUpdated).toLocaleString() : '—';
-            const started = s.journeyStartTime ? new Date(s.journeyStartTime).toLocaleTimeString() : null;
-            const hasLoc = s.currentLocation && s.currentLocation.lat;
-            return `
+            if (students.length === 0) {
+              grid.innerHTML = '<div class="empty">No students found.</div>'; return;
+            }
+
+            const statusIcon = { in_hostel: '🏠', on_way: '🚶', reached: '✅' };
+
+            grid.innerHTML = students.map(s => {
+              const dest = s.destination ? (s.destination.address || `${s.destination.lat?.toFixed(4)}, ${s.destination.lng?.toFixed(4)}`) : null;
+              const updated = s.lastUpdated ? new Date(s.lastUpdated).toLocaleString() : '—';
+              const started = s.journeyStartTime ? new Date(s.journeyStartTime).toLocaleTimeString() : null;
+              const hasLoc = s.currentLocation && s.currentLocation.lat;
+              return `
         <div class="stu-card ${s.status}">
           <div class="stu-card-header">
             <div class="stu-avatar ${s.status}">${esc(s.name.charAt(0).toUpperCase())}</div>
@@ -1345,255 +1354,255 @@
           </div>
           <div class="stu-card-map" id="map-${esc(s.id)}"></div>
         </div>`;
-          }).join("");
-        }
-
-        function populateBatchFilter() {
-          const select = document.getElementById("batchFilter");
-          const current = select.value;
-          const ids = new Set(Object.values(allStudents).map(s => s.batchId).filter(Boolean));
-          select.innerHTML = '<option value="">All Batches</option>' +
-            Array.from(ids).map(b => `<option value="${b}">${b}</option>`).join("");
-          select.value = current;
-        }
-
-        function renderBatches() {
-          const tbody = document.getElementById("batchTableBody");
-          const batches = Object.values(allBatches);
-          if (batches.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty">No batches created yet.</td></tr>'; return;
+            }).join("");
           }
-          tbody.innerHTML = batches.map(b => {
-            const count = Object.values(allStudents).filter(s => s.batchId === b.id).length;
-            return `<tr>
+
+          function populateBatchFilter() {
+            const select = document.getElementById("batchFilter");
+            const current = select.value;
+            const ids = new Set(Object.values(allStudents).map(s => s.batchId).filter(Boolean));
+            select.innerHTML = '<option value="">All Batches</option>' +
+              Array.from(ids).map(b => `<option value="${b}">${b}</option>`).join("");
+            select.value = current;
+          }
+
+          function renderBatches() {
+            const tbody = document.getElementById("batchTableBody");
+            const batches = Object.values(allBatches);
+            if (batches.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="4" class="empty">No batches created yet.</td></tr>'; return;
+            }
+            tbody.innerHTML = batches.map(b => {
+              const count = Object.values(allStudents).filter(s => s.batchId === b.id).length;
+              return `<tr>
         <td>${esc(b.id)}</td>
         <td><span class="tbl-badge ${b.status === 'completed' ? 'reached' : 'in_hostel'}">${b.status}</span></td>
         <td>${count}</td>
         <td>${b.status === 'active'
-                ? `<button class="small-btn danger" onclick="completeBatch('${esc(b.id)}')">Mark Completed & Remove Students</button>`
-                : '—'}</td>
+                  ? `<button class="small-btn danger" onclick="completeBatch('${esc(b.id)}')">Mark Completed & Remove Students</button>`
+                  : '—'}</td>
       </tr>`;
-          }).join("");
-        }
-
-        window.createBatch = async function () {
-          const id = document.getElementById("newBatchId").value.trim();
-          if (!id) return alert("Enter a batch ID.");
-          const existing = await db.ref("batches/" + id).once("value");
-          if (existing.exists()) return alert("Batch already exists.");
-          await db.ref("batches/" + id).set({ id, status: "active", createdAt: Date.now() });
-          document.getElementById("newBatchId").value = "";
-        };
-
-        window.completeBatch = async function (batchId) {
-          if (!confirm(`Mark "${batchId}" as completed and REMOVE all its students + accounts? This cannot be undone.`)) return;
-          const toRemove = Object.values(allStudents).filter(s => s.batchId === batchId);
-          for (const s of toRemove) {
-            await db.ref("students/" + s.id).remove();
-            await db.ref("users/" + s.id).remove();
+            }).join("");
           }
-          await db.ref("batches/" + batchId).update({ status: "completed", completedAt: Date.now() });
-          alert(`Batch "${batchId}" completed. ${toRemove.length} student(s) removed.`);
-        };
 
-        window.adminResetStatus = async function (studentId) {
-          await db.ref("students/" + studentId).update({
-            status: "in_hostel", destination: null,
-            journeyStartTime: null, journeyEndTime: null, lastUpdated: Date.now()
-          });
-        };
+          window.createBatch = async function () {
+            const id = document.getElementById("newBatchId").value.trim();
+            if (!id) return alert("Enter a batch ID.");
+            const existing = await db.ref("batches/" + id).once("value");
+            if (existing.exists()) return alert("Batch already exists.");
+            await db.ref("batches/" + id).set({ id, status: "active", createdAt: Date.now() });
+            document.getElementById("newBatchId").value = "";
+          };
 
-        window.deleteStudent = async function (studentId) {
-          if (!confirm(`Remove student "${studentId}" and their account? This cannot be undone.`)) return;
-          await db.ref("students/" + studentId).remove();
-          await db.ref("users/" + studentId).remove();
-        };
-
-        const cardMaps = {}; // { studentId: { map, markers, ref } }
-
-        window.toggleTrack = function (studentId, btn) {
-          const mapEl = document.getElementById('map-' + studentId);
-          const isOpen = mapEl.classList.contains('open');
-
-          if (isOpen) {
-            mapEl.classList.remove('open');
-            mapEl.innerHTML = '';
-            btn.textContent = '📍 Track';
-            if (cardMaps[studentId]) {
-              cardMaps[studentId].ref.off();
-              delete cardMaps[studentId];
+          window.completeBatch = async function (batchId) {
+            if (!confirm(`Mark "${batchId}" as completed and REMOVE all its students + accounts? This cannot be undone.`)) return;
+            const toRemove = Object.values(allStudents).filter(s => s.batchId === batchId);
+            for (const s of toRemove) {
+              await db.ref("students/" + s.id).remove();
+              await db.ref("users/" + s.id).remove();
             }
-            return;
-          }
+            await db.ref("batches/" + batchId).update({ status: "completed", completedAt: Date.now() });
+            alert(`Batch "${batchId}" completed. ${toRemove.length} student(s) removed.`);
+          };
 
-          const s = allStudents[studentId];
-          if (!s || !s.currentLocation || !s.currentLocation.lat) {
+          window.adminResetStatus = async function (studentId) {
+            await db.ref("students/" + studentId).update({
+              status: "in_hostel", destination: null,
+              journeyStartTime: null, journeyEndTime: null, lastUpdated: Date.now()
+            });
+          };
+
+          window.deleteStudent = async function (studentId) {
+            if (!confirm(`Remove student "${studentId}" and their account? This cannot be undone.`)) return;
+            await db.ref("students/" + studentId).remove();
+            await db.ref("users/" + studentId).remove();
+          };
+
+          const cardMaps = {}; // { studentId: { map, markers, ref } }
+
+          window.toggleTrack = function (studentId, btn) {
+            const mapEl = document.getElementById('map-' + studentId);
+            const isOpen = mapEl.classList.contains('open');
+
+            if (isOpen) {
+              mapEl.classList.remove('open');
+              mapEl.innerHTML = '';
+              btn.textContent = '📍 Track';
+              if (cardMaps[studentId]) {
+                cardMaps[studentId].ref.off();
+                delete cardMaps[studentId];
+              }
+              return;
+            }
+
+            const s = allStudents[studentId];
+            if (!s || !s.currentLocation || !s.currentLocation.lat) {
+              mapEl.classList.add('open');
+              mapEl.style.height = 'auto';
+              mapEl.innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:13px;">📡 No live location yet. Student hasn\'t started a journey.</div>';
+              btn.textContent = '❌ Close';
+              cardMaps[studentId] = { ref: { off: () => { } } };
+              return;
+            }
+
+            mapEl.style.height = '220px';
             mapEl.classList.add('open');
-            mapEl.style.height = 'auto';
-            mapEl.innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:13px;">📡 No live location yet. Student hasn\'t started a journey.</div>';
-            btn.textContent = '❌ Close';
-            cardMaps[studentId] = { ref: { off: () => { } } };
-            return;
-          }
+            btn.textContent = '❌ Close Map';
 
-          mapEl.style.height = '220px';
-          mapEl.classList.add('open');
-          btn.textContent = '❌ Close Map';
+            // init leaflet map inside card
+            const m = L.map(mapEl).setView([13.0827, 80.2707], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(m);
 
-          // init leaflet map inside card
-          const m = L.map(mapEl).setView([13.0827, 80.2707], 13);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-          }).addTo(m);
+            let markers = {};
+            const ref = db.ref('students/' + studentId);
 
-          let markers = {};
-          const ref = db.ref('students/' + studentId);
+            ref.on('value', (snap) => {
+              const data = snap.val();
+              if (!data || !data.currentLocation) return;
 
-          ref.on('value', (snap) => {
-            const data = snap.val();
-            if (!data || !data.currentLocation) return;
+              Object.values(markers).forEach(mk => m.removeLayer(mk));
+              markers = {};
 
-            Object.values(markers).forEach(mk => m.removeLayer(mk));
-            markers = {};
+              const lat = data.currentLocation.lat;
+              const lng = data.currentLocation.lng;
 
-            const lat = data.currentLocation.lat;
-            const lng = data.currentLocation.lng;
+              const icon = L.divIcon({
+                className: '',
+                html: `<div style="background:${data.status === 'on_way' ? '#e6a800' : '#27ae60'};color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.25);">${esc(data.name.charAt(0).toUpperCase())}</div>`,
+                iconSize: [34, 34], iconAnchor: [17, 17]
+              });
 
-            const icon = L.divIcon({
-              className: '',
-              html: `<div style="background:${data.status === 'on_way' ? '#e6a800' : '#27ae60'};color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.25);">${esc(data.name.charAt(0).toUpperCase())}</div>`,
-              iconSize: [34, 34], iconAnchor: [17, 17]
+              const mk = L.marker([lat, lng], { icon }).addTo(m);
+              mk.bindPopup(`<b>${esc(data.name)}</b><br>${esc(statusLabel(data.status))}<br>${new Date(data.currentLocation.timestamp).toLocaleTimeString()}`).openPopup();
+              markers[studentId] = mk;
+
+              const bounds = [[lat, lng]];
+
+              if (data.destination && data.destination.lat) {
+                const destIcon = L.divIcon({
+                  className: '',
+                  html: `<div style="background:#e74c3c;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.25);">🏠</div>`,
+                  iconSize: [28, 28], iconAnchor: [14, 14]
+                });
+                const dm = L.marker([data.destination.lat, data.destination.lng], { icon: destIcon }).addTo(m);
+                dm.bindPopup(`Destination: ${esc(data.destination.address || '')}`);
+                markers[studentId + '_dest'] = dm;
+                const line = L.polyline([[lat, lng], [data.destination.lat, data.destination.lng]], { color: '#1e3c72', dashArray: '5,5', weight: 2 }).addTo(m);
+                markers[studentId + '_line'] = line;
+                bounds.push([data.destination.lat, data.destination.lng]);
+              }
+
+              m.fitBounds(bounds, { padding: [30, 30] });
+              setTimeout(() => m.invalidateSize(), 200);
             });
 
-            const mk = L.marker([lat, lng], { icon }).addTo(m);
-            mk.bindPopup(`<b>${esc(data.name)}</b><br>${esc(statusLabel(data.status))}<br>${new Date(data.currentLocation.timestamp).toLocaleTimeString()}`).openPopup();
-            markers[studentId] = mk;
+            cardMaps[studentId] = { map: m, markers, ref };
+          };
 
-            const bounds = [[lat, lng]];
+          // Settings dropdown toggle
+          window.toggleSettings = function (btn) {
+            const dropdown = btn.nextElementSibling;
+            const isOpen = dropdown.classList.contains('open');
+            closeAllDropdowns();
+            if (!isOpen) dropdown.classList.add('open');
+          };
 
-            if (data.destination && data.destination.lat) {
-              const destIcon = L.divIcon({
-                className: '',
-                html: `<div style="background:#e74c3c;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.25);">🏠</div>`,
-                iconSize: [28, 28], iconAnchor: [14, 14]
-              });
-              const dm = L.marker([data.destination.lat, data.destination.lng], { icon: destIcon }).addTo(m);
-              dm.bindPopup(`Destination: ${esc(data.destination.address || '')}`);
-              markers[studentId + '_dest'] = dm;
-              const line = L.polyline([[lat, lng], [data.destination.lat, data.destination.lng]], { color: '#1e3c72', dashArray: '5,5', weight: 2 }).addTo(m);
-              markers[studentId + '_line'] = line;
-              bounds.push([data.destination.lat, data.destination.lng]);
-            }
+          window.closeAllDropdowns = function () {
+            document.querySelectorAll('.stu-dropdown.open').forEach(d => d.classList.remove('open'));
+          };
 
-            m.fitBounds(bounds, { padding: [30, 30] });
-            setTimeout(() => m.invalidateSize(), 200);
+          // Close dropdown when clicking outside
+          document.addEventListener('click', (e) => {
+            if (!e.target.closest('.stu-settings')) closeAllDropdowns();
           });
 
-          cardMaps[studentId] = { map: m, markers, ref };
-        };
-
-        // Settings dropdown toggle
-        window.toggleSettings = function (btn) {
-          const dropdown = btn.nextElementSibling;
-          const isOpen = dropdown.classList.contains('open');
-          closeAllDropdowns();
-          if (!isOpen) dropdown.classList.add('open');
-        };
-
-        window.closeAllDropdowns = function () {
-          document.querySelectorAll('.stu-dropdown.open').forEach(d => d.classList.remove('open'));
-        };
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-          if (!e.target.closest('.stu-settings')) closeAllDropdowns();
-        });
-
-        function notifyStatusChange(s) {
-          const labels = { on_way: "started their journey", reached: "reached their destination", in_hostel: "returned to hostel" };
-          const msg = `${s.name} has ${labels[s.status] || s.status}!`;
-          showToast(msg, s.status);
-          if (typeof voiceInterval !== 'undefined' && voiceInterval) speak(msg);
-          if (window.Notification && Notification.permission === "granted") new Notification("CF Parents Update", { body: msg });
-        }
-
-        function showToast(text, status) {
-          const container = document.getElementById('toastContainer');
-          const toast = document.createElement('div');
-          toast.className = `toast ${status}`;
-          toast.textContent = text;
-          container.appendChild(toast);
-          setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transition = 'opacity 0.5s';
-            setTimeout(() => toast.remove(), 500);
-          }, 4000);
-        }
-
-        // ─── Voice Guide Logic ───────────────────────────────────
-        let voiceInterval = null;
-
-        window.toggleVoiceGuide = function () {
-          const btn = document.getElementById("voiceBtn");
-          if (voiceInterval) {
-            clearInterval(voiceInterval);
-            voiceInterval = null;
-            btn.textContent = "🔊 Enable Voice Guide (Off)";
-            btn.classList.replace("danger", "purple");
-            speak("Voice guide disabled.");
-          } else {
-            btn.textContent = "🔇 Disable Voice Guide (On)";
-            btn.classList.replace("purple", "danger");
-            speak("Voice guide enabled. I will update you on traveling students every 10 minutes.");
-            if (window.Notification && Notification.permission !== "granted") Notification.requestPermission();
-
-            // Immediate update, then every 10 mins
-            announceTravelingStudents();
-            voiceInterval = setInterval(announceTravelingStudents, 10 * 60 * 1000);
+          function notifyStatusChange(s) {
+            const labels = { on_way: "started their journey", reached: "reached their destination", in_hostel: "returned to hostel" };
+            const msg = `${s.name} has ${labels[s.status] || s.status}!`;
+            showToast(msg, s.status);
+            if (typeof voiceInterval !== 'undefined' && voiceInterval) speak(msg);
+            if (window.Notification && Notification.permission === "granted") new Notification("CF Parents Update", { body: msg });
           }
-        };
 
-        function announceTravelingStudents() {
-          const traveling = Object.values(allStudents).filter(s => s.status === 'on_way');
-          if (traveling.length === 0) {
-            speak("Update: No students are currently on the way.");
-            return;
+          function showToast(text, status) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${status}`;
+            toast.textContent = text;
+            container.appendChild(toast);
+            setTimeout(() => {
+              toast.style.opacity = '0';
+              toast.style.transition = 'opacity 0.5s';
+              setTimeout(() => toast.remove(), 500);
+            }, 4000);
           }
-          speak(`Update: ${traveling.length} student${traveling.length > 1 ? 's are' : ' is'} currently traveling.`);
-          traveling.forEach(s => {
-            const dest = s.destination?.address || "their destination";
-            let distanceInfo = "";
 
-            if (s.currentLocation?.lat && s.destination?.lat) {
-              const dist = getDistance(
-                s.currentLocation.lat, s.currentLocation.lng,
-                s.destination.lat, s.destination.lng
-              );
-              distanceInfo = `, and is currently ${dist.toFixed(1)} kilometers away.`;
+          // ─── Voice Guide Logic ───────────────────────────────────
+          let voiceInterval = null;
+
+          window.toggleVoiceGuide = function () {
+            const btn = document.getElementById("voiceBtn");
+            if (voiceInterval) {
+              clearInterval(voiceInterval);
+              voiceInterval = null;
+              btn.textContent = "🔊 Enable Voice Guide (Off)";
+              btn.classList.replace("danger", "purple");
+              speak("Voice guide disabled.");
+            } else {
+              btn.textContent = "🔇 Disable Voice Guide (On)";
+              btn.classList.replace("purple", "danger");
+              speak("Voice guide enabled. I will update you on traveling students every 10 minutes.");
+              if (window.Notification && Notification.permission !== "granted") Notification.requestPermission();
+
+              // Immediate update, then every 10 mins
+              announceTravelingStudents();
+              voiceInterval = setInterval(announceTravelingStudents, 10 * 60 * 1000);
             }
+          };
 
-            speak(`${s.name} is on the way to ${dest}${distanceInfo}`);
-          });
+          function announceTravelingStudents() {
+            const traveling = Object.values(allStudents).filter(s => s.status === 'on_way');
+            if (traveling.length === 0) {
+              speak("Update: No students are currently on the way.");
+              return;
+            }
+            speak(`Update: ${traveling.length} student${traveling.length > 1 ? 's are' : ' is'} currently traveling.`);
+            traveling.forEach(s => {
+              const dest = s.destination?.address || "their destination";
+              let distanceInfo = "";
+
+              if (s.currentLocation?.lat && s.destination?.lat) {
+                const dist = getDistance(
+                  s.currentLocation.lat, s.currentLocation.lng,
+                  s.destination.lat, s.destination.lng
+                );
+                distanceInfo = `, and is currently ${dist.toFixed(1)} kilometers away.`;
+              }
+
+              speak(`${s.name} is on the way to ${dest}${distanceInfo}`);
+            });
+          }
+
+          function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            window.speechSynthesis.speak(utterance);
+          }
+
+          function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+          }
+
+          window.renderStudents = renderStudents;
         }
-
-        function speak(text) {
-          const utterance = new SpeechSynthesisUtterance(text);
-          window.speechSynthesis.speak(utterance);
-        }
-
-        function getDistance(lat1, lon1, lat2, lon2) {
-          const R = 6371; // Radius of the earth in km
-          const dLat = (lat2 - lat1) * Math.PI / 180;
-          const dLon = (lon2 - lon1) * Math.PI / 180;
-          const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          return R * c;
-        }
-
-        window.renderStudents = renderStudents;
-      }
     </script>
 
 </body>

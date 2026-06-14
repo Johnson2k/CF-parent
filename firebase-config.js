@@ -1,17 +1,24 @@
-// =========================================
-// REPLACE WITH YOUR FIREBASE PROJECT CONFIG
-// Firebase Console -> Project Settings -> General -> Your apps -> Web app
-// =========================================
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAEYLb-12Sy1IJt-Sw-1IG3tnmiNsKyFAg",
+  authDomain: "cf-parent.firebaseapp.com",
+  databaseURL: "https://cf-parent-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "cf-parent",
+  storageBucket: "cf-parent.firebasestorage.app",
+  messagingSenderId: "496223135941",
+  appId: "1:496223135941:web:da8c92a5b928aac28828ac"
 };
 
-// Initialize Firebase (compat SDK loaded via CDN in HTML files)
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+try {
+  if (typeof firebase !== 'undefined') {
+    firebase.initializeApp(firebaseConfig);
+    // Attach db to window to make it globally accessible across all scripts
+    var db = firebase.database();
+    window.db = db;
+    console.log("Firebase initialized successfully.");
+  } else {
+    throw new Error("Firebase SDK (firebase-app-compat.js) is not loaded.");
+  }
+} catch (e) {
+  console.error("Firebase Initialization Error:", e.message);
+  alert("Critical Error: The tracking system could not connect to Google Services. Please check your internet connection.");
+}

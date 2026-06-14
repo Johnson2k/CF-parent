@@ -1,283 +1,397 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CF Parents - Admin Dashboard</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
-  body { background: #f4f6f9; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CF Parents - Admin Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
 
-  header {
-    background: #1e3c72;
-    color: #fff;
-    padding: 16px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  header h1 { font-size: 20px; }
-  header .right { display: flex; align-items: center; gap: 14px; }
-  header button {
-    background: #fff;
-    color: #1e3c72;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-weight: 700;
-    cursor: pointer;
-  }
+    body {
+      background: #f4f6f9;
+    }
 
-  .container { padding: 20px; max-width: 1300px; margin: 0 auto; }
+    header {
+      background: #1e3c72;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
 
-  .section {
-    background: #fff;
-    border-radius: 10px;
-    padding: 18px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  }
-  .section h2 { font-size: 17px; margin-bottom: 14px; color: #333; }
+    header h1 {
+      font-size: 20px;
+    }
 
-  #map { height: 420px; border-radius: 8px; }
-  .map-search {
-    display: flex; gap: 8px; margin-bottom: 10px;
-  }
-  .map-search input {
-    flex: 1; padding: 8px 12px; border: 1px solid #ddd;
-    border-radius: 6px; font-size: 13px; outline: none;
-  }
-  .map-search input:focus { border-color: #1e3c72; }
-  .map-search button {
-    padding: 8px 14px; background: #1e3c72; color: #fff;
-    border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer;
-  }
-  .map-search button:hover { background: #16305c; }
+    header .right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
 
-  .filter-row {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  .filter-row select, .filter-row input {
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    font-size: 13px;
-  }
-  .filter-row button {
-    padding: 8px 16px;
-    background: #e74c3c;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-  }
+    header button {
+      background: #fff;
+      color: #1e3c72;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 700;
+      cursor: pointer;
+    }
 
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
-  th { background: #f8f9fb; color: #555; font-weight: 700; }
+    .container {
+      padding: 20px;
+      max-width: 1300px;
+      margin: 0 auto;
+    }
 
-  .badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 700;
-  }
-  .badge.in_hostel { background: #eafaf1; color: #27ae60; }
-  .badge.on_way { background: #fff7e0; color: #e6a800; }
-  .badge.reached { background: #e8f0fe; color: #1967d2; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
 
-  .small-btn {
-    padding: 5px 10px;
-    border-radius: 6px;
-    border: none;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    background: #1e3c72;
-    color: #fff;
-    margin-right: 4px;
-  }
-  .small-btn.danger { background: #e74c3c; }
+    .stat-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      text-align: center;
+    }
 
-  .empty { text-align: center; color: #999; padding: 20px; }
+    .stat-card .num {
+      font-size: 28px;
+      font-weight: 800;
+      color: #1e3c72;
+    }
 
-  .saved-loc-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; }
-  .saved-loc-row:last-child { border-bottom: none; }
-  .saved-loc-name { flex: 1; font-weight: 600; color: #333; }
-  .saved-loc-coords { color: #999; font-size: 12px; }
-</style>
+    .stat-card .label {
+      font-size: 13px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .section {
+      background: #fff;
+      border-radius: 10px;
+      padding: 18px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .section h2 {
+      font-size: 17px;
+      margin-bottom: 14px;
+      color: #333;
+    }
+
+    #map {
+      height: 420px;
+      border-radius: 8px;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-row select,
+    .filter-row input {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      font-size: 13px;
+    }
+
+    .filter-row button {
+      padding: 8px 16px;
+      background: #e74c3c;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    th {
+      background: #f8f9fb;
+      color: #555;
+      font-weight: 700;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .badge.in_hostel {
+      background: #eafaf1;
+      color: #27ae60;
+    }
+
+    .badge.on_way {
+      background: #fff7e0;
+      color: #e6a800;
+    }
+
+    .badge.reached {
+      background: #e8f0fe;
+      color: #1967d2;
+    }
+
+    .small-btn {
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: none;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #1e3c72;
+      color: #fff;
+      margin-right: 4px;
+    }
+
+    .small-btn.danger {
+      background: #e74c3c;
+    }
+
+    .empty {
+      text-align: center;
+      color: #999;
+      padding: 20px;
+    }
+  </style>
 </head>
+
 <body>
 
-<header>
-  <h1>CF Parents — Admin Dashboard</h1>
-  <div class="right">
-    <span id="adminName"></span>
-    <button onclick="logoutUser()">Logout</button>
-  </div>
-</header>
-
-<div class="container">
-
-  <!-- Live Map - always visible -->
-  <div class="section" id="mapSection">
-    <h2 style="display:flex;justify-content:space-between;align-items:center;">
-      <span>📍 Live Tracking Map</span>
-    </h2>
-    <div class="map-search">
-      <input type="text" id="mapSearchInput" placeholder="Search location on map..." onkeydown="if(event.key==='Enter')searchMapLocation()">
-      <button onclick="searchMapLocation()">🔍 Search</button>
+  <header>
+    <h1>CF Parents — Admin Dashboard</h1>
+    <div class="right">
+      <span id="adminName"></span>
+      <button onclick="logoutUser()">Logout</button>
     </div>
-    <div id="map"></div>
+  </header>
 
-    <!-- Saved Locations list inside map section -->
-    <div style="margin-top:14px;">
-      <h3 style="font-size:14px;color:#333;margin-bottom:8px;">📌 Saved Locations</h3>
-      <div id="savedLocationsList"><div class="empty" style="padding:10px;">No saved locations yet.</div></div>
+  <div class="container">
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="num" id="statTotal">0</div>
+        <div class="label">Total Students</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="statInHostel">0</div>
+        <div class="label">In Hostel</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="statOnWay">0</div>
+        <div class="label">On the Way</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="statReached">0</div>
+        <div class="label">Reached</div>
+      </div>
     </div>
+
+    <!-- Map Panel (hidden by default, shown when Track is clicked) -->
+    <div class="section" id="mapSection" style="display:none;">
+      <h2 style="display:flex;justify-content:space-between;align-items:center;">
+        <span>📍 Tracking: <span id="trackingName" style="color:#1e3c72;">—</span></span>
+        <button class="small-btn danger" onclick="closeMap()">✕ Close Map</button>
+      </h2>
+      <div id="map"></div>
+    </div>
+
+    <div class="section">
+      <h2>Manage Batches</h2>
+      <div class="filter-row">
+        <input type="text" id="newBatchId" placeholder="New Batch ID (e.g. BATCH2027)">
+        <button class="small-btn" style="background:#27ae60" onclick="createBatch()">+ Create Batch</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Batch ID</th>
+            <th>Status</th>
+            <th>Students</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="batchTableBody">
+          <tr>
+            <td colspan="4" class="empty">Loading...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Students</h2>
+      <div class="filter-row">
+        <select id="batchFilter" onchange="renderStudents()">
+          <option value="">All Batches</option>
+        </select>
+        <select id="statusFilter" onchange="renderStudents()">
+          <option value="">All Statuses</option>
+          <option value="in_hostel">In Hostel</option>
+          <option value="on_way">On the Way</option>
+          <option value="reached">Reached</option>
+        </select>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Batch</th>
+            <th>Status</th>
+            <th>Destination</th>
+            <th>Last Updated</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="studentsTableBody">
+          <tr>
+            <td colspan="7" class="empty">Loading...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
   </div>
 
-  <div class="section">
-    <h2>Manage Batches</h2>
-    <div class="filter-row">
-      <input type="text" id="newBatchId" placeholder="New Batch ID (e.g. BATCH2027)">
-      <button class="small-btn" style="background:#27ae60" onclick="createBatch()">+ Create Batch</button>
-    </div>
-    <table>
-      <thead><tr><th>Batch ID</th><th>Status</th><th>Students</th><th>Action</th></tr></thead>
-      <tbody id="batchTableBody"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
-    </table>
-  </div>
+  <script type="module" src="js/firebase.js"></script>
+  <script type="module" src="js/db.js"></script>
+  <script type="module" src="js/auth.js"></script>
 
-  <div class="section">
-    <h2>Students</h2>
-    <div class="filter-row">
-      <select id="batchFilter" onchange="renderStudents()">
-        <option value="">All Batches</option>
-      </select>
-      <select id="statusFilter" onchange="renderStudents()">
-        <option value="">All Statuses</option>
-        <option value="on_way">On the Way</option>
-        <option value="reached">Reached</option>
-      </select>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th><th>Name</th><th>Batch</th><th>Status</th><th>Destination</th><th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="studentsTableBody"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
-    </table>
-  </div>
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-</div>
+  <script>
+    // Route guard
+    const session = requireRole("admin");
+    if (session) document.getElementById("adminName").textContent = "Logged in as: " + session.id;
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-<script src="js/firebase-config.js"></script>
-<script src="js/auth.js"></script>
+    let allStudents = {};
+    let allBatches = {};
+    let markers = {};
 
-<!-- Leaflet -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    // Listen to students in real-time
+    db.ref("students").on("value", (snapshot) => {
+      allStudents = snapshot.val() || {};
+      updateStats();
+      renderStudents();
+      updateMap();
+      populateBatchFilter();
+    });
 
-<script>
-// Route guard
-const session = requireRole("admin");
-if (session) document.getElementById("adminName").textContent = "Logged in as: " + session.id;
+    // Listen to batches
+    db.ref("batches").on("value", (snapshot) => {
+      allBatches = snapshot.val() || {};
+      renderBatches();
+      populateBatchFilter();
+    });
 
-let allStudents = {};
-let allBatches = {};
+    function updateStats() {
+      const students = Object.values(allStudents);
+      document.getElementById("statTotal").textContent = students.length;
+      document.getElementById("statInHostel").textContent = students.filter(s => s.status === "in_hostel").length;
+      document.getElementById("statOnWay").textContent = students.filter(s => s.status === "on_way").length;
+      document.getElementById("statReached").textContent = students.filter(s => s.status === "reached").length;
+    }
 
-window.addEventListener("DOMContentLoaded", () => initMap());
+    function statusLabel(status) {
+      return { in_hostel: "In Hostel", on_way: "On the Way", reached: "Reached" }[status] || status;
+    }
 
-// Listen to students in real-time
-db.ref("students").on("value", (snapshot) => {
-  allStudents = snapshot.val() || {};
-  updateStats();
-  renderStudents();
-  updateMap();
-  populateBatchFilter();
-});
+    function renderStudents() {
+      const tbody = document.getElementById("studentsTableBody");
+      const batchFilter = document.getElementById("batchFilter").value;
+      const statusFilter = document.getElementById("statusFilter").value;
 
-// Listen to batches
-db.ref("batches").on("value", (snapshot) => {
-  allBatches = snapshot.val() || {};
-  renderBatches();
-  populateBatchFilter();
-});
+      let students = Object.values(allStudents);
+      if (batchFilter) students = students.filter(s => s.batchId === batchFilter);
+      if (statusFilter) students = students.filter(s => s.status === statusFilter);
 
-function updateStats() {}
+      if (students.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No students found.</td></tr>';
+        return;
+      }
 
-function statusLabel(status) {
-  return { in_hostel: "In Hostel", on_way: "On the Way", reached: "Reached" }[status] || status;
-}
-
-function renderStudents() {
-  const tbody = document.getElementById("studentsTableBody");
-  const batchFilter = document.getElementById("batchFilter").value;
-  const statusFilter = document.getElementById("statusFilter").value;
-
-  let students = Object.values(allStudents);
-  if (batchFilter) students = students.filter(s => s.batchId === batchFilter);
-  if (statusFilter) students = students.filter(s => s.status === statusFilter);
-
-  if (students.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">No students found.</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = students.map(s => {
-    const dest = s.destination ? (s.destination.address || `${s.destination.lat?.toFixed(4)}, ${s.destination.lng?.toFixed(4)}`) : "—";
-    return `
+      tbody.innerHTML = students.map(s => {
+        const dest = s.destination ? (s.destination.address || `${s.destination.lat?.toFixed(4)}, ${s.destination.lng?.toFixed(4)}`) : "—";
+        const updated = s.lastUpdated ? new Date(s.lastUpdated).toLocaleString() : "—";
+        return `
       <tr>
         <td>${s.id}</td>
         <td>${s.name}</td>
         <td>${s.batchId}</td>
         <td><span class="badge ${s.status}">${statusLabel(s.status)}</span></td>
         <td>${dest}</td>
+        <td>${updated}</td>
         <td>
-          ${s.currentLocation && s.currentLocation.lat ? `<button class="small-btn" style="background:#27ae60" onclick="focusStudent('${s.id}')">📍 Focus</button>` : ''}
+          ${s.currentLocation && s.currentLocation.lat ? `<button class="small-btn" style="background:#27ae60" onclick="trackStudent('${s.id}')">📍 Track</button>` : ''}
           <button class="small-btn" onclick="resetStatus('${s.id}')">Reset to In Hostel</button>
           <button class="small-btn danger" onclick="deleteStudent('${s.id}')">Remove</button>
         </td>
       </tr>
     `;
-  }).join("");
-}
+      }).join("");
+    }
 
-function populateBatchFilter() {
-  const select = document.getElementById("batchFilter");
-  const current = select.value;
-  const batchIds = new Set(Object.values(allStudents).map(s => s.batchId).filter(Boolean));
-  select.innerHTML = '<option value="">All Batches</option>' +
-    Array.from(batchIds).map(b => `<option value="${b}">${b}</option>`).join("");
-  select.value = current;
-}
+    function populateBatchFilter() {
+      const select = document.getElementById("batchFilter");
+      const current = select.value;
+      const batchIds = new Set(Object.values(allStudents).map(s => s.batchId).filter(Boolean));
+      select.innerHTML = '<option value="">All Batches</option>' +
+        Array.from(batchIds).map(b => `<option value="${b}">${b}</option>`).join("");
+      select.value = current;
+    }
 
-function renderBatches() {
-  const tbody = document.getElementById("batchTableBody");
-  const batches = Object.values(allBatches);
+    function renderBatches() {
+      const tbody = document.getElementById("batchTableBody");
+      const batches = Object.values(allBatches);
 
-  if (batches.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty">No batches created yet.</td></tr>';
-    return;
-  }
+      if (batches.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">No batches created yet.</td></tr>';
+        return;
+      }
 
-  tbody.innerHTML = batches.map(b => {
-    const studentCount = Object.values(allStudents).filter(s => s.batchId === b.id).length;
-    return `
+      tbody.innerHTML = batches.map(b => {
+        const studentCount = Object.values(allStudents).filter(s => s.batchId === b.id).length;
+        return `
       <tr>
         <td>${b.id}</td>
         <td><span class="badge ${b.status === 'completed' ? 'reached' : 'in_hostel'}">${b.status}</span></td>
@@ -289,233 +403,143 @@ function renderBatches() {
         </td>
       </tr>
     `;
-  }).join("");
-}
-
-async function createBatch() {
-  const id = document.getElementById("newBatchId").value.trim();
-  if (!id) return alert("Enter a batch ID.");
-
-  const existing = await db.ref("batches/" + id).once("value");
-  if (existing.exists()) return alert("Batch already exists.");
-
-  await db.ref("batches/" + id).set({
-    id: id,
-    status: "active",
-    createdAt: Date.now()
-  });
-  document.getElementById("newBatchId").value = "";
-}
-
-async function completeBatch(batchId) {
-  if (!confirm(`Mark "${batchId}" as completed and REMOVE all its students + their accounts? This cannot be undone.`)) return;
-
-  // Find students in this batch
-  const studentsToRemove = Object.values(allStudents).filter(s => s.batchId === batchId);
-
-  for (const s of studentsToRemove) {
-    await db.ref("students/" + s.id).remove();
-    await db.ref("users/" + s.id).remove();
-  }
-
-  await db.ref("batches/" + batchId).update({ status: "completed", completedAt: Date.now() });
-  alert(`Batch "${batchId}" marked completed. ${studentsToRemove.length} student record(s) removed.`);
-}
-
-async function resetStatus(studentId) {
-  await db.ref("students/" + studentId).update({
-    status: "in_hostel",
-    destination: null,
-    journeyStartTime: null,
-    journeyEndTime: null,
-    lastUpdated: Date.now()
-  });
-}
-
-async function deleteStudent(studentId) {
-  if (!confirm(`Remove student "${studentId}" and their account? This cannot be undone.`)) return;
-  await db.ref("students/" + studentId).remove();
-  await db.ref("users/" + studentId).remove();
-}
-
-// ===== MAP =====
-let map = null;
-let studentMarkers = {};
-
-function initMap() {
-  if (map) return;
-  map = L.map('map').setView([13.0827, 80.2707], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
-}
-
-function esc(str) {
-  const d = document.createElement('div');
-  d.textContent = str || '';
-  return d.innerHTML;
-}
-
-function updateMap() {
-  initMap();
-  // Remove markers for students no longer active
-  Object.keys(studentMarkers).forEach(id => {
-    if (!allStudents[id] || !allStudents[id].currentLocation) {
-      studentMarkers[id].forEach(l => map.removeLayer(l));
-      delete studentMarkers[id];
+      }).join("");
     }
-  });
 
-  Object.values(allStudents).forEach(s => {
-    if (!s.currentLocation || !s.currentLocation.lat) return;
+    async function createBatch() {
+      const id = document.getElementById("newBatchId").value.trim();
+      if (!id) return alert("Enter a batch ID.");
 
-    const lat = s.currentLocation.lat;
-    const lng = s.currentLocation.lng;
+      const existing = await db.ref("batches/" + id).once("value");
+      if (existing.exists()) return alert("Batch already exists.");
 
-    // Remove old layers for this student
-    if (studentMarkers[s.id]) studentMarkers[s.id].forEach(l => map.removeLayer(l));
-    studentMarkers[s.id] = [];
-
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="background:${s.status === 'on_way' ? '#e6a800' : '#27ae60'};color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${esc(s.name.charAt(0).toUpperCase())}</div>`,
-      iconSize: [36, 36], iconAnchor: [18, 18]
-    });
-
-    const m = L.marker([lat, lng], { icon }).addTo(map);
-    m.bindPopup(`<b>${esc(s.name)}</b><br>Batch: ${esc(s.batchId)}<br>Status: ${esc(statusLabel(s.status))}<br>Updated: ${new Date(s.currentLocation.timestamp).toLocaleTimeString()}`);
-    studentMarkers[s.id].push(m);
-
-    if (s.destination && s.destination.lat) {
-      const destIcon = L.divIcon({
-        className: '',
-        html: `<div style="background:#e74c3c;color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">🏠</div>`,
-        iconSize: [30, 30], iconAnchor: [15, 15]
+      await db.ref("batches/" + id).set({
+        id: id,
+        status: "active",
+        createdAt: Date.now()
       });
-      const dm = L.marker([s.destination.lat, s.destination.lng], { icon: destIcon }).addTo(map);
-      dm.bindPopup(`${esc(s.name)}'s destination: ${esc(s.destination.address || '')}`);
-      studentMarkers[s.id].push(dm);
-
-      const ln = L.polyline([[lat, lng], [s.destination.lat, s.destination.lng]], { color: '#1e3c72', dashArray: '6,6', weight: 2 }).addTo(map);
-      studentMarkers[s.id].push(ln);
+      document.getElementById("newBatchId").value = "";
     }
-  });
 
-  setTimeout(() => map.invalidateSize(), 100);
-}
+    async function completeBatch(batchId) {
+      if (!confirm(`Mark "${batchId}" as completed and REMOVE all its students + their accounts? This cannot be undone.`)) return;
 
-function focusStudent(studentId) {
-  const s = allStudents[studentId];
-  if (!s || !s.currentLocation) return;
-  initMap();
-  map.setView([s.currentLocation.lat, s.currentLocation.lng], 15);
-  if (studentMarkers[s.id]) studentMarkers[s.id][0]?.openPopup();
-}
+      // Find students in this batch
+      const studentsToRemove = Object.values(allStudents).filter(s => s.batchId === batchId);
 
-let searchMarker = null;
-let lastSearchResult = null;
+      for (const s of studentsToRemove) {
+        await db.ref("students/" + s.id).remove();
+        await db.ref("users/" + s.id).remove();
+      }
 
-async function searchMapLocation() {
-  const query = document.getElementById("mapSearchInput").value.trim();
-  if (!query) return;
+      await db.ref("batches/" + batchId).update({ status: "completed", completedAt: Date.now() });
+      alert(`Batch "${batchId}" marked completed. ${studentsToRemove.length} student record(s) removed.`);
+    }
 
-  initMap();
-  const mapSection = document.getElementById("mapSection");
-  if (mapSection.style.display === "none") {
-    mapSection.style.display = "block";
-    document.getElementById("trackingName").textContent = "—";
-    mapSection.scrollIntoView({ behavior: "smooth", block: "start" });
-    setTimeout(() => map.invalidateSize(), 200);
-  }
+    async function resetStatus(studentId) {
+      await db.ref("students/" + studentId).update({
+        status: "in_hostel",
+        destination: null,
+        journeyStartTime: null,
+        journeyEndTime: null,
+        lastUpdated: Date.now()
+      });
+    }
 
-  try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`, {
-      headers: { "Accept-Language": "en" }
-    });
-    const data = await res.json();
-    if (!data.length) return alert("Location not found.");
+    async function deleteStudent(studentId) {
+      if (!confirm(`Remove student "${studentId}" and their account? This cannot be undone.`)) return;
+      await db.ref("students/" + studentId).remove();
+      await db.ref("users/" + studentId).remove();
+    }
 
-    const lat = parseFloat(data[0].lat);
-    const lng = parseFloat(data[0].lon);
-    const label = data[0].display_name;
-    lastSearchResult = { lat, lng, label };
+    // ===== MAP =====
+    let map = null;
 
-    if (searchMarker) map.removeLayer(searchMarker);
-    searchMarker = L.marker([lat, lng]).addTo(map);
-    searchMarker.bindPopup(
-      `<b>📍 ${esc(label)}</b><br><br><button onclick="saveSearchedLocation()" style="padding:5px 10px;background:#1e3c72;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;">💾 Save Location</button>`
-    ).openPopup();
-    map.setView([lat, lng], 14);
-  } catch(e) { alert("Search failed. Check your connection."); }
-}
+    function initMap() {
+      if (map) return;
+      map = L.map('map').setView([13.0827, 80.2707], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+    }
 
-async function saveSearchedLocation() {
-  if (!lastSearchResult) return;
-  const name = prompt("Enter a name for this location:", lastSearchResult.label.split(",")[0]);
-  if (!name || !name.trim()) return;
-  const key = db.ref("savedLocations").push().key;
-  await db.ref("savedLocations/" + key).set({
-    id: key,
-    name: name.trim(),
-    lat: lastSearchResult.lat,
-    lng: lastSearchResult.lng,
-    savedAt: Date.now()
-  });
-  if (searchMarker) searchMarker.closePopup();
-}
+    // sanitize strings before putting them in map popups
+    function esc(str) {
+      const d = document.createElement('div');
+      d.textContent = str || '';
+      return d.innerHTML;
+    }
 
-// Listen to saved locations
-db.ref("savedLocations").on("value", (snap) => {
-  const locs = snap.val() || {};
-  renderSavedLocations(locs);
-});
+    function trackStudent(studentId) {
+      const s = allStudents[studentId];
+      if (!s || !s.currentLocation) return;
 
-function renderSavedLocations(locs) {
-  const container = document.getElementById("savedLocationsList");
-  const list = Object.values(locs);
-  if (!list.length) {
-    container.innerHTML = '<div class="empty" style="padding:10px;">No saved locations yet.</div>';
-    return;
-  }
-  container.innerHTML = list.map(loc => `
-    <div class="saved-loc-row">
-      <span class="saved-loc-name">📌 ${esc(loc.name)}</span>
-      <span class="saved-loc-coords">${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}</span>
-      <button class="small-btn" style="background:#27ae60" onclick="viewSavedLocation('${loc.id}')">📍 View</button>
-      <button class="small-btn" onclick="renameSavedLocation('${loc.id}','${esc(loc.name)}')">✏️ Rename</button>
-      <button class="small-btn danger" onclick="deleteSavedLocation('${loc.id}')">🗑</button>
-    </div>
-  `).join("");
-}
+      // stop any previous live listener
+      if (window._trackingRef) window._trackingRef.off();
 
-function viewSavedLocation(id) {
-  db.ref("savedLocations/" + id).once("value").then(snap => {
-    const loc = snap.val();
-    if (!loc) return;
-    initMap();
-    const mapSection = document.getElementById("mapSection");
-    if (mapSection.style.display === "none") {
+      const mapSection = document.getElementById("mapSection");
       mapSection.style.display = "block";
-      setTimeout(() => map.invalidateSize(), 200);
+      document.getElementById("trackingName").textContent = s.name + " (" + s.batchId + ")";
+      mapSection.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      initMap();
+
+      // live-update: re-draw markers every time this student's data changes
+      window._trackingRef = db.ref("students/" + studentId);
+      window._trackingRef.on("value", (snap) => {
+        const data = snap.val();
+        if (!data || !data.currentLocation) return;
+
+        Object.values(markers).forEach(m => map.removeLayer(m));
+        markers = {};
+
+        const lat = data.currentLocation.lat;
+        const lng = data.currentLocation.lng;
+
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="background:${data.status === 'on_way' ? '#e6a800' : '#27ae60'};color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${esc(data.name.charAt(0).toUpperCase())}</div>`,
+          iconSize: [36, 36], iconAnchor: [18, 18]
+        });
+
+        const m = L.marker([lat, lng], { icon }).addTo(map);
+        m.bindPopup(
+          `<b>${esc(data.name)}</b><br>Batch: ${esc(data.batchId)}<br>Status: ${esc(statusLabel(data.status))}<br>Updated: ${new Date(data.currentLocation.timestamp).toLocaleTimeString()}`
+        ).openPopup();
+        markers[data.id] = m;
+
+        const bounds = [[lat, lng]];
+
+        if (data.destination && data.destination.lat) {
+          const destIcon = L.divIcon({
+            className: '',
+            html: `<div style="background:#e74c3c;color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">🏠</div>`,
+            iconSize: [30, 30], iconAnchor: [15, 15]
+          });
+          const dm = L.marker([data.destination.lat, data.destination.lng], { icon: destIcon }).addTo(map);
+          dm.bindPopup(`${esc(data.name)}'s destination: ${esc(data.destination.address || '')}`);
+          markers[data.id + "_dest"] = dm;
+
+          const line = L.polyline([[lat, lng], [data.destination.lat, data.destination.lng]], { color: '#1e3c72', dashArray: '6,6', weight: 2 }).addTo(map);
+          markers[data.id + "_line"] = line;
+          bounds.push([data.destination.lat, data.destination.lng]);
+        }
+
+        map.fitBounds(bounds, { padding: [50, 50] });
+        setTimeout(() => map.invalidateSize(), 200);
+      });
     }
-    if (searchMarker) map.removeLayer(searchMarker);
-    searchMarker = L.marker([loc.lat, loc.lng]).addTo(map);
-    searchMarker.bindPopup(`<b>📌 ${esc(loc.name)}</b>`).openPopup();
-    map.setView([loc.lat, loc.lng], 14);
-  });
-}
 
-async function renameSavedLocation(id, currentName) {
-  const newName = prompt("Rename location:", currentName);
-  if (!newName || !newName.trim() || newName.trim() === currentName) return;
-  await db.ref("savedLocations/" + id).update({ name: newName.trim() });
-}
+    function closeMap() {
+      if (window._trackingRef) { window._trackingRef.off(); window._trackingRef = null; }
+      document.getElementById("mapSection").style.display = "none";
+      Object.values(markers).forEach(m => map.removeLayer(m));
+      markers = {};
+    }
 
-async function deleteSavedLocation(id) {
-  if (!confirm("Delete this saved location?")) return;
-  await db.ref("savedLocations/" + id).remove();
-}
-</script>
+    function updateMap() { } // no-op, map updates only on Track click
+  </script>
 
 </body>
+
 </html>
