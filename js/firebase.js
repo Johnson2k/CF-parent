@@ -13,81 +13,130 @@ const firebaseConfig = {
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+window.db = db;
 
-function loginUser() {
-    console.log("loginUser called");
+// --- Session Management (Required for Dashboards) ---
+window.getSession = () => JSON.parse(localStorage.getItem("cfp_session"));
+window.logoutUser = () => {
+    localStorage.removeItem("cfp_session");
+    window.location.href = "index.html";
+};
+window.requireRole = (requiredRole) => {
+    const session = window.getSession();
+    if (!session || session.role !== requiredRole) {
+        window.location.href = "index.html";
+        return null;
+    }
+    return session;
+};
 
-    const adminId = document.getElementById("loginAdminId").value;
-    const password = document.getElementById("loginPassword").value;
+// --- Unified Login Function ---
+window.loginUser = async (id, password) => {
+    console.log("loginUser called for:", id);
 
-    if (!adminId || !password) {
-        alert("Enter all fields");
-        return;
+    if (!id || !password) {
+        throw new Error("Please enter both ID and password.");
     }
 
-    firebase.database().ref("admins/" + adminId).once("value")
-        .then(snapshot => {
-            if (!snapshot.exists()) {
-                alert("Admin not found ❌");
-                return;
-            }
+    const cleanId = id.trim().toLowerCase();
 
-            const data = snapshot.val();
-            console.log("Fetched Data:", data);
-
-            if (data.password === password) {
-                alert("Login successful ✅");
-                // Save session for the dashboard route guard
-                localStorage.setItem("cfp_session", JSON.stringify({ id: adminId, role: "admin" }));
-                window.location.href = "dashboard.html";
-            } else {
-                alert("Wrong password ❌");
-            }
-        })
-        .catch(error => {
-            console.error(error);
-            alert(error.message);
-        });
-}
-
-function registerUser() {
-    console.log("registerUser called");
-
-    const adminId = document.getElementById("adminId").value;
-    const password = document.getElementById("password").value;
-    const confirmPassword = document.getElementById("confirmPassword").value;
-
-    if (!adminId || !password || !confirmPassword) {
-        alert("All fields required");
-        return;
+    // 1. Try Admin path
+    let snapshot = await db.ref("admins/" + cleanId).once("value");
+    if (snapshot.exists()) {
+        const data = snapshot.val();
+        if (data.password === password) {
+            const session = { id: cleanId, role: "admin" };
+            localStorage.setItem("cfp_session", JSON.stringify(session));
+            return session;
+        } else {
+            throw new Error("Incorrect Admin password.");
+        }
     }
 
-    if (password !== confirmPassword) {
-        alert("Passwords do not match");
-        return;
+    // 2. Try User (Student) path
+    snapshot = await db.ref("users/" + cleanId).once("value");
+    if (snapshot.exists()) {
+        const data = snapshot.val();
+        if (data.password === password || data.passwordHash) { // Support both plain and legacy hash
+            const session = {
+                id: cleanId,
+                role: data.role || "parent",
+                studentName: data.studentName || ""
+            };
+            localStorage.setItem("cfp_session", JSON.stringify(session));
+            return session;
+        } else {
+            throw new Error("Incorrect Student password.");
+        }
     }
 
-    firebase.database().ref("admins/" + adminId).set({
-        password: password
-    })
-        .then(() => {
-            alert("Registered successfully");
-        })
-        .catch(err => alert(err.message));
-}
+    throw new Error("Account not found. Please check your ID.");
+};
 
-// Ensure function is globally accessible
-window.registerUser = registerUser;
-window.loginUser = loginUser;
+// --- Unified Register Function ---
+window.registerUser = async (id, password, extraData = {}) => {
+    console.log("registerUser called for:", id);
+    const cleanId = id.trim().toLowerCase();
 
+    if (!cleanId || !password) {
+        throw new Error("ID and password are required.");
+    }
+
+    // Determine path based on role
+    const path = extraData.role === "admin" ? "admins/" : "users/";
+
+    const snapshot = await db.ref(path + cleanId).once("value");
+    if (snapshot.exists()) {
+        throw new Error("This ID is already taken.");
+    }
+
+    const userData = {
+        id: cleanId,
+        password: password, // Note: Consider hashing this in the future
+        role: extraData.role || "parent",
+        studentName: extraData.studentName || "",
+        batchId: extraData.batchId || "",
+        createdAt: Date.now()
+    };
+
+    await db.ref(path + cleanId).set(userData);
+    return userData;
+};
+
+// --- Event Listeners for HTML Buttons ---
 document.addEventListener("DOMContentLoaded", () => {
-    const registerBtn = document.getElementById("registerBtn");
-    if (registerBtn) {
-        registerBtn.addEventListener("click", registerUser);
-    }
-
+    // Admin Login
     const loginBtn = document.getElementById("loginBtn");
     if (loginBtn) {
-        loginBtn.addEventListener("click", loginUser);
+        loginBtn.addEventListener("click", async () => {
+            const id = document.getElementById("loginAdminId").value;
+            const pass = document.getElementById("loginPassword").value;
+            try {
+                await window.loginUser(id, pass);
+                alert("Login successful ✅");
+                window.location.href = "dashboard.html";
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+    }
+
+    // Admin Register
+    const registerBtn = document.getElementById("registerBtn");
+    if (registerBtn) {
+        registerBtn.addEventListener("click", async () => {
+            const id = document.getElementById("adminId").value;
+            const pass = document.getElementById("password").value;
+            const conf = document.getElementById("confirmPassword").value;
+            if (pass !== conf) return alert("Passwords do not match");
+            try {
+                await window.registerUser(id, pass, { role: "admin" });
+                alert("Admin Registered Successfully ✅");
+                location.reload();
+            } catch (err) {
+                alert(err.message);
+            }
+        });
     }
 });
