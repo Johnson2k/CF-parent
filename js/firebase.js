@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const pass = document.getElementById("loginPassword")?.value;
             try {
                 const session = await window.loginUser(id, pass);
-                window.location.href = "dashboard.html";
+                window.location.href = session.role === "admin" ? "admin.html" : "dashboard.html";
             } catch (err) {
                 alert(err.message);
             }

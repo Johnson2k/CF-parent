@@ -170,6 +170,11 @@
       color: #1967d2;
     }
 
+    .badge.at_home {
+      background: #f3f0ff;
+      color: #6f42c1;
+    }
+
     .small-btn {
       padding: 5px 10px;
       border-radius: 6px;
@@ -223,6 +228,10 @@
         <div class="num" id="statReached">0</div>
         <div class="label">Reached</div>
       </div>
+      <div class="stat-card">
+        <div class="num" id="statAtHome">0</div>
+        <div class="label">At Home</div>
+      </div>
     </div>
 
     <!-- Map Panel (hidden by default, shown when Track is clicked) -->
@@ -268,6 +277,7 @@
           <option value="in_hostel">In Hostel</option>
           <option value="on_way">On the Way</option>
           <option value="reached">Reached</option>
+          <option value="at_home">At Home</option>
         </select>
       </div>
       <table>
@@ -277,6 +287,7 @@
             <th>Name</th>
             <th>Batch</th>
             <th>Status</th>
+            <th>Presence</th>
             <th>Destination</th>
             <th>Last Updated</th>
             <th>Action</th>
@@ -284,7 +295,7 @@
         </thead>
         <tbody id="studentsTableBody">
           <tr>
-            <td colspan="7" class="empty">Loading...</td>
+            <td colspan="8" class="empty">Loading...</td>
           </tr>
         </tbody>
       </table>
@@ -307,12 +318,39 @@
     let allStudents = {};
     let allBatches = {};
     let markers = {};
+    let hostelLocation = null;
+
+    // Fetch hostel location for presence calculation
+    db.ref("hostel").on("value", (snap) => {
+      hostelLocation = snap.val();
+      renderStudents();
+    });
+
+    // Helper to calculate distance for Presence column
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Radius of the earth in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    // sanitize strings
+    function esc(str) {
+      const d = document.createElement('div');
+      d.textContent = str || '';
+      return d.innerHTML;
+    }
 
     // Listen to students in real-time
     db.ref("students").on("value", (snapshot) => {
       allStudents = snapshot.val() || {};
       updateStats();
       renderStudents();
+      renderBatches();
       updateMap();
       populateBatchFilter();
     });
@@ -325,41 +363,69 @@
     });
 
     function updateStats() {
-      const students = Object.values(allStudents);
+      const students = Object.values(allStudents || {}).filter(s => s && s.id);
       document.getElementById("statTotal").textContent = students.length;
       document.getElementById("statInHostel").textContent = students.filter(s => s.status === "in_hostel").length;
       document.getElementById("statOnWay").textContent = students.filter(s => s.status === "on_way").length;
       document.getElementById("statReached").textContent = students.filter(s => s.status === "reached").length;
+      document.getElementById("statAtHome").textContent = students.filter(s => s.status === "at_home").length;
     }
 
     function statusLabel(status) {
-      return { in_hostel: "In Hostel", on_way: "On the Way", reached: "Reached" }[status] || status;
+      return { in_hostel: "In Hostel", on_way: "On the Way", reached: "Reached", at_home: "At Home" }[status] || status;
     }
 
     function renderStudents() {
       const tbody = document.getElementById("studentsTableBody");
-      const batchFilter = document.getElementById("batchFilter").value;
-      const statusFilter = document.getElementById("statusFilter").value;
+      if (!tbody) return;
 
-      let students = Object.values(allStudents);
+      const batchFilter = document.getElementById("batchFilter")?.value || "";
+      const statusFilter = document.getElementById("statusFilter")?.value || "";
+
+      let students = Object.values(allStudents || {}).filter(s => s && s.id);
       if (batchFilter) students = students.filter(s => s.batchId === batchFilter);
       if (statusFilter) students = students.filter(s => s.status === statusFilter);
 
       if (students.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty">No students found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">No students found.</td></tr>';
         return;
       }
 
       tbody.innerHTML = students.map(s => {
-        const dest = s.destination ? (s.destination.address || `${s.destination.lat?.toFixed(4)}, ${s.destination.lng?.toFixed(4)}`) : "—";
+        const sName = s.name || "Unknown";
+        const sBatch = s.batchId || "N/A";
+
+        let dest = "—";
+        if (s.destination) {
+          const dLat = parseFloat(s.destination.lat);
+          const dLng = parseFloat(s.destination.lng);
+          dest = s.destination.address || (!isNaN(dLat) ? `${dLat.toFixed(4)}, ${dLng.toFixed(4)}` : "—");
+        }
+
         const updated = s.lastUpdated ? new Date(s.lastUpdated).toLocaleString() : "—";
+
+        let presence = "—";
+        let presenceColor = "#555";
+        if (s.currentLocation && s.currentLocation.lat) {
+          const lat = s.currentLocation.lat;
+          const lng = s.currentLocation.lng;
+          if (s.destination && s.destination.lat && s.destination.lng && getDistance(lat, lng, s.destination.lat, s.destination.lng) < 0.3) { presence = "🏡 Home"; presenceColor = "#6f42c1"; }
+          else if (hostelLocation && getDistance(lat, lng, hostelLocation.lat, hostelLocation.lng) < 0.3) { presence = "🏫 Hostel"; presenceColor = "#27ae60"; }
+          else presence = "🚶 Way";
+        } else {
+          if (s.status === "at_home" || s.status === "reached") { presence = "🏡 Home"; presenceColor = "#6f42c1"; }
+          else if (s.status === "in_hostel") { presence = "🏫 Hostel"; presenceColor = "#27ae60"; }
+          else presence = "🚶 Way";
+        }
+
         return `
       <tr>
         <td>${s.id}</td>
-        <td>${s.name}</td>
-        <td>${s.batchId}</td>
-        <td><span class="badge ${s.status}">${statusLabel(s.status)}</span></td>
-        <td>${dest}</td>
+        <td>${esc(sName)}</td>
+        <td>${esc(sBatch)}</td>
+        <td><span class="badge ${s.status || 'in_hostel'}">${statusLabel(s.status || 'in_hostel')}</span></td>
+        <td style="font-weight:700; color:${presenceColor}">${presence}</td>
+        <td>${esc(dest)}</td>
         <td>${updated}</td>
         <td>
           ${s.currentLocation && s.currentLocation.lat ? `<button class="small-btn" style="background:#27ae60" onclick="trackStudent('${s.id}')">📍 Track</button>` : ''}
@@ -374,7 +440,8 @@
     function populateBatchFilter() {
       const select = document.getElementById("batchFilter");
       const current = select.value;
-      const batchIds = new Set(Object.values(allStudents).map(s => s.batchId).filter(Boolean));
+      const validStudents = Object.values(allStudents || {}).filter(s => s && s && s.batchId);
+      const batchIds = new Set(validStudents.map(s => s.batchId));
       select.innerHTML = '<option value="">All Batches</option>' +
         Array.from(batchIds).map(b => `<option value="${b}">${b}</option>`).join("");
       select.value = current;
@@ -390,7 +457,7 @@
       }
 
       tbody.innerHTML = batches.map(b => {
-        const studentCount = Object.values(allStudents).filter(s => s.batchId === b.id).length;
+        const studentCount = Object.values(allStudents || {}).filter(s => s && s.batchId === b.id).length;
         return `
       <tr>
         <td>${b.id}</td>
@@ -408,17 +475,33 @@
 
     async function createBatch() {
       const id = document.getElementById("newBatchId").value.trim();
-      if (!id) return alert("Enter a batch ID.");
+      if (!id) {
+        alert("Please enter a Batch ID.");
+        return;
+      }
+      if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+        alert("Batch ID can only contain letters, numbers, hyphens, and underscores.");
+        return;
+      }
 
-      const existing = await db.ref("batches/" + id).once("value");
-      if (existing.exists()) return alert("Batch already exists.");
+      try {
+        const existing = await db.ref("batches/" + id).once("value");
+        if (existing.exists()) {
+          alert("This Batch ID already exists.");
+          return;
+        }
 
-      await db.ref("batches/" + id).set({
-        id: id,
-        status: "active",
-        createdAt: Date.now()
-      });
-      document.getElementById("newBatchId").value = "";
+        await db.ref("batches/" + id).set({
+          id: id,
+          status: "active",
+          createdAt: Date.now()
+        });
+        document.getElementById("newBatchId").value = "";
+        alert(`Batch "${id}" created successfully!`);
+      } catch (err) {
+        console.error("Create Batch Error:", err);
+        alert("Error creating batch: " + err.message);
+      }
     }
 
     async function completeBatch(batchId) {
@@ -437,6 +520,7 @@
     }
 
     async function resetStatus(studentId) {
+      if (!confirm("Reset this student's status to 'In Hostel'? This will clear their current journey data.")) return;
       await db.ref("students/" + studentId).update({
         status: "in_hostel",
         destination: null,
@@ -463,13 +547,6 @@
       }).addTo(map);
     }
 
-    // sanitize strings before putting them in map popups
-    function esc(str) {
-      const d = document.createElement('div');
-      d.textContent = str || '';
-      return d.innerHTML;
-    }
-
     function trackStudent(studentId) {
       const s = allStudents[studentId];
       if (!s || !s.currentLocation) return;
@@ -493,12 +570,14 @@
         Object.values(markers).forEach(m => map.removeLayer(m));
         markers = {};
 
-        const lat = data.currentLocation.lat;
+        const lat = data.currentLocation?.lat;
         const lng = data.currentLocation.lng;
+        const sName = data.name || "Student";
+        const sLetter = sName.charAt(0).toUpperCase();
 
         const icon = L.divIcon({
           className: '',
-          html: `<div style="background:${data.status === 'on_way' ? '#e6a800' : '#27ae60'};color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${esc(data.name.charAt(0).toUpperCase())}</div>`,
+          html: `<div style="background:${data.status === 'on_way' ? '#e6a800' : '#27ae60'};color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${esc(sLetter)}</div>`,
           iconSize: [36, 36], iconAnchor: [18, 18]
         });
 

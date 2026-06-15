@@ -76,6 +76,18 @@
       display: none;
     }
 
+    .sync-btn {
+      background: rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #555;
+      margin-top: 8px;
+    }
+
     /* Stats */
     .stats {
       display: grid;
@@ -174,6 +186,11 @@
       border-left: 5px solid #1967d2;
     }
 
+    .status-card.at_home {
+      background: #e8f0fe;
+      border-left: 5px solid #6f42c1;
+    }
+
     .status-icon {
       font-size: 36px;
     }
@@ -209,6 +226,11 @@
 
     .badge.reached {
       background: #1967d2;
+      color: #fff;
+    }
+
+    .badge.at_home {
+      background: #6f42c1;
       color: #fff;
     }
 
@@ -540,6 +562,10 @@
       border-top-color: #1967d2;
     }
 
+    .stu-card.at_home {
+      border-top-color: #6f42c1;
+    }
+
     .stu-card-header {
       display: flex;
       align-items: center;
@@ -569,6 +595,10 @@
 
     .stu-avatar.reached {
       background: #1967d2;
+    }
+
+    .stu-avatar.at_home {
+      background: #6f42c1;
     }
 
     .stu-card-name {
@@ -624,6 +654,11 @@
     .stu-status-pill.reached {
       background: #e8f0fe;
       color: #1967d2;
+    }
+
+    .stu-status-pill.at_home {
+      background: #f3f0ff;
+      color: #6f42c1;
     }
 
     .stu-card-actions {
@@ -833,7 +868,8 @@
       <div class="avatar" id="avatarLetter">?</div>
       <div class="profile-info">
         <div class="name" id="studentName">Loading...</div>
-        <div id="presenceStatus" style="font-size: 14px; margin-top: 4px; opacity: 0.95; font-weight: 600;">Status: —</div>
+        <div id="presenceStatus" style="font-size: 14px; margin-top: 4px; opacity: 0.95; font-weight: 600;">Status: —
+        </div>
         <div class="meta">
           <span>🎓 Batch: <b id="batchId">—</b></span>
           <span>🆔 ID: <b id="studentIdDisplay">—</b></span>
@@ -848,6 +884,7 @@
         <div class="status-text">
           <div class="title" id="statusTitle">In Hostel</div>
           <div class="sub" id="statusSub">You are currently at the hostel</div>
+          <button class="sync-btn" onclick="syncStatusWithLocation()">🔄 Sync Location & Status</button>
         </div>
       </div>
       <span class="badge in_hostel" id="statusBadge">In Hostel</span>
@@ -878,9 +915,12 @@
       <div class="section-title">🚶 Journey Controls</div>
       <div class="loc-btn-row">
         <button class="loc-btn yellow" id="startBtn" onclick="startJourney()">🚶 Start Journey</button>
-        <button class="loc-btn blue" id="atHomeBtn" onclick="markReached()" style="display:none;">🏡 I am at Home Now</button>
-        <button class="loc-btn green" id="stopBtn" onclick="markReached()" style="display:none;">✅ I've Reached Destination</button>
-        <button class="loc-btn red" id="resetBtn" onclick="resetJourney()" style="display:none;">🔄 Reset to Hostel</button>
+        <button class="loc-btn blue" id="atHomeBtn" onclick="markReached()" style="display:none;">🏡 I am at Home
+          Now</button>
+        <button class="loc-btn green" id="stopBtn" onclick="markReached()" style="display:none;">✅ I've Reached
+          Destination</button>
+        <button class="loc-btn red" id="resetBtn" onclick="resetJourney()" style="display:none;">🔄 Reset to
+          Hostel</button>
       </div>
       <div class="loc-msg" id="journeyLocMsg"></div>
     </div>
@@ -937,6 +977,10 @@
         <div class="stat-card">
           <div class="num" id="statReached">0</div>
           <div class="label">Reached</div>
+        </div>
+        <div class="stat-card">
+          <div class="num" id="statAtHome">0</div>
+          <div class="label">At Home</div>
         </div>
       </div>
 
@@ -1001,6 +1045,7 @@
               <option value="in_hostel">🏠 In Hostel</option>
               <option value="on_way">🚶 On the Way</option>
               <option value="reached">✅ Reached</option>
+              <option value="at_home">🏡 At Home</option>
             </select>
           </div>
         </div>
@@ -1022,8 +1067,9 @@
       window.addEventListener("load", () => {
         const session = window.getSession();
         if (!session) { window.location.href = "index.html"; return; }
+        if (session.role === "admin") { window.location.href = "admin.html"; return; }
 
-        const isAdmin = session.role === "admin";
+        const isAdmin = false;
         const userId = session.id;
 
         document.getElementById("headerUser").textContent = "Logged in as: " + userId;
@@ -1050,7 +1096,7 @@
         // Show admin sections if admin
         if (isAdmin) {
           document.getElementById("adminDivider").style.display = "block";
-          document.getElementById("statsSection").style.display = "grid";
+          document.getElementById("statsSection").style.display = "block";
           document.getElementById("hostelLocationSection").style.display = "block";
           document.getElementById("batchSection").style.display = "block";
           document.getElementById("studentsSection").style.display = "block";
@@ -1068,7 +1114,7 @@
 
         // ─── Shared helpers ─────────────────────────────────────────
         function statusLabel(s) {
-          return { in_hostel: "In Hostel", on_way: "On the Way", reached: "Reached" }[s] || s;
+          return { in_hostel: "In Hostel", on_way: "On the Way", reached: "Reached", at_home: "At Home" }[s] || s;
         }
 
         function esc(str) {
@@ -1095,7 +1141,8 @@
         const statusConfig = {
           in_hostel: { icon: "🏠", title: "In Hostel", sub: "You are currently at the hostel", badge: "In Hostel" },
           on_way: { icon: "🚶", title: "On the Way", sub: "Your live location is being shared", badge: "On the Way" },
-          reached: { icon: "✅", title: "Reached Destination", sub: "You have arrived at your destination", badge: "Reached" }
+          reached: { icon: "✅", title: "Reached Destination", sub: "You have arrived at your destination", badge: "Reached" },
+          at_home: { icon: "🏡", title: "At Home", sub: "You are safely at home", badge: "At Home" }
         };
 
         // For admin: listen to their own student record if it exists, else just show profile
@@ -1113,15 +1160,17 @@
           currentStudentData = data;
           renderStudentDashboard(data);
 
-          // Auto-resume location sharing if status is on_way
-          if (!isAdmin && data.status === "on_way") {
+          // Always keep location monitoring active for students
+          // so status auto-updates based on GPS (home / hostel / on_way)
+          if (!isAdmin) {
             startLocationSharing();
           }
         });
 
         function renderStudentDashboard(data) {
-          document.getElementById("studentName").textContent = data.name;
-          document.getElementById("avatarLetter").textContent = data.name.charAt(0).toUpperCase();
+          const sName = data.name || userId || "Student";
+          document.getElementById("studentName").textContent = sName;
+          document.getElementById("avatarLetter").textContent = sName.charAt(0).toUpperCase();
           document.getElementById("batchId").textContent = data.batchId;
 
           let presenceText = "Unknown";
@@ -1151,12 +1200,14 @@
             }
           } else {
             // Fallback to data.status
-            if (data.status === "reached") {
+            if (data.status === "reached" || data.status === "at_home") {
               presenceText = "🏡 At Home";
             } else if (data.status === "on_way") {
               presenceText = "🚶 On the Way";
-            } else {
+            } else if (data.status === "in_hostel") {
               presenceText = "🏫 In Hostel";
+            } else {
+              presenceText = "❓ Unknown";
             }
           }
 
@@ -1194,7 +1245,7 @@
             const atHomeBtn = document.getElementById("atHomeBtn");
             const stopBtn = document.getElementById("stopBtn");
             const resetBtn = document.getElementById("resetBtn");
-            
+
             if (startBtn && atHomeBtn && stopBtn && resetBtn) {
               const status = data.status || "in_hostel";
               if (status === "on_way") {
@@ -1202,11 +1253,12 @@
                 atHomeBtn.style.display = "inline-block";
                 stopBtn.style.display = "inline-block";
                 resetBtn.style.display = "none";
-              } else if (status === "reached") {
+              } else if (status === "reached" || status === "at_home") {
                 startBtn.style.display = "none";
                 atHomeBtn.style.display = "none";
                 stopBtn.style.display = "none";
                 resetBtn.style.display = "inline-block";
+                stopLocationSharing(); // Stop watching once reached
               } else { // in_hostel
                 startBtn.style.display = "inline-block";
                 atHomeBtn.style.display = "none";
@@ -1216,6 +1268,36 @@
             }
           }
         }
+
+        // Automatically request location and sync status on app initialization for students
+        if (!isAdmin) {
+          setTimeout(() => {
+            if (typeof window.syncStatusWithLocation === 'function') window.syncStatusWithLocation();
+          }, 1000);
+        }
+
+        window.syncStatusWithLocation = function () {
+          if (!navigator.geolocation) {
+            showLocMsg("journeyLocMsg", "Geolocation not supported.", "error");
+            return;
+          }
+          showLocMsg("journeyLocMsg", "Requesting location permission...", "info");
+          navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+              const lat = pos.coords.latitude;
+              const lng = pos.coords.longitude;
+              showLocMsg("journeyLocMsg", "Location synced!", "success");
+              await runGeofenceCheck(lat, lng);
+              // Save current location to DB so the dashboard UI reflects physical presence
+              await db.ref("students/" + userId).update({
+                currentLocation: { lat, lng, timestamp: Date.now() },
+                lastUpdated: Date.now()
+              });
+            },
+            (err) => showLocMsg("journeyLocMsg", "Location access denied or failed: " + err.message, "error"),
+            { enableHighAccuracy: true }
+          );
+        };
 
         // ─── Pick on Map ─────────────────────────────────────────────
         window.pickMaps = {};
@@ -1279,11 +1361,13 @@
             document.getElementById('homeLocationText').textContent = address + ` (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
             document.getElementById('homeLocationSet').style.display = 'block';
             showLocMsg('homeLocMsg', 'Home location set from map!', 'success');
+            syncStatusWithLocation();
           } else {
             await db.ref('hostel').set({ lat, lng, address });
             document.getElementById('hostelLocationText').textContent = address + ` (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
             document.getElementById('hostelLocationSet').style.display = 'block';
             showLocMsg('hostelLocMsg', 'Hostel location set from map!', 'success');
+            syncStatusWithLocation();
           }
         }
 
@@ -1350,6 +1434,7 @@
               lastUpdated: Date.now()
             });
             showLocMsg("homeLocMsg", "Home location pinned!", "success");
+            syncStatusWithLocation();
           }, () => showLocMsg("homeLocMsg", "Could not get location.", "error"), { enableHighAccuracy: true });
         }
 
@@ -1386,14 +1471,18 @@
         };
 
         window.markReached = async function () {
+          if (!currentStudentData || !currentStudentData.destination) {
+            showLocMsg("journeyLocMsg", "Please set your home location first.", "error");
+            return;
+          }
+          if (!userId) return;
           showLocMsg("journeyLocMsg", "Updating status...", "info");
           try {
             await db.ref("students/" + userId).update({
-              status: "reached",
+              status: "at_home",
               journeyEndTime: Date.now(),
               lastUpdated: Date.now()
             });
-            stopLocationSharing();
             showLocMsg("journeyLocMsg", "You've been marked as reached home safely! 🎉", "success");
           } catch (err) {
             showLocMsg("journeyLocMsg", "Error: " + err.message, "error");
@@ -1401,10 +1490,12 @@
         };
 
         window.resetJourney = async function () {
+          if (!userId) return;
           if (!confirm("Reset your status to 'In Hostel' and clear location/journey data?")) return;
           showLocMsg("journeyLocMsg", "Resetting...", "info");
           try {
             await db.ref("students/" + userId).update({
+              id: userId,
               status: "in_hostel",
               destination: null,
               journeyStartTime: null,
@@ -1425,42 +1516,57 @@
 
         async function runGeofenceCheck(lat, lng) {
           if (!currentStudentData) return;
-          
+
+          let nearHome = false;
+          let nearHostel = false;
+
           // Check distance to home (destination)
           if (currentStudentData.destination && currentStudentData.destination.lat) {
             const distHome = getDistance(lat, lng, currentStudentData.destination.lat, currentStudentData.destination.lng);
-            if (distHome < 0.3) { // within 300 meters of home
-              if (currentStudentData.status !== "reached") {
-                console.log("Geofence: close to home, updating status to reached");
-                await db.ref("students/" + userId).update({
-                  status: "reached",
-                  journeyEndTime: Date.now(),
-                  lastUpdated: Date.now()
-                });
-                stopLocationSharing();
-              }
-              return;
-            }
+            if (distHome < 0.3) nearHome = true; // within 300 meters
           }
-          
+
           // Check distance to hostel
           if (hostelLocation && hostelLocation.lat) {
             const distHostel = getDistance(lat, lng, hostelLocation.lat, hostelLocation.lng);
-            if (distHostel < 0.3) { // within 300 meters of hostel
-              if (currentStudentData.status !== "in_hostel") {
-                console.log("Geofence: close to hostel, updating status to in_hostel");
-                await db.ref("students/" + userId).update({
-                  status: "in_hostel",
-                  journeyStartTime: null,
-                  journeyEndTime: null,
-                  currentLocation: null,
-                  lastUpdated: Date.now()
-                });
-                stopLocationSharing();
-              }
-              return;
+            if (distHostel < 0.3) nearHostel = true; // within 300 meters
+          }
+
+          if (nearHome) {
+            // Student is at home
+            if (currentStudentData.status !== "at_home") {
+              console.log("Geofence: close to home, auto-updating status to at_home");
+              await db.ref("students/" + userId).update({
+                status: "at_home",
+                journeyEndTime: Date.now(),
+                lastUpdated: Date.now()
+              });
+            }
+          } else if (nearHostel) {
+            // Student is at hostel
+            if (currentStudentData.status !== "in_hostel") {
+              console.log("Geofence: close to hostel, auto-updating status to in_hostel");
+              await db.ref("students/" + userId).update({
+                status: "in_hostel",
+                journeyStartTime: null,
+                journeyEndTime: null,
+                lastUpdated: Date.now()
+              });
+            }
+          } else {
+            // Student is neither at home nor hostel — they are on the way
+            if (currentStudentData.status !== "on_way") {
+              console.log("Geofence: not near home or hostel, auto-updating status to on_way");
+              await db.ref("students/" + userId).update({
+                status: "on_way",
+                journeyStartTime: currentStudentData.journeyStartTime || Date.now(),
+                journeyEndTime: null,
+                lastUpdated: Date.now()
+              });
             }
           }
+          // Location watcher stays active — never stopped by geofence
+          // so we can continuously detect home ↔ hostel ↔ on_way transitions
         }
 
         function startLocationSharing() {
@@ -1499,41 +1605,15 @@
 
         window.addEventListener("beforeunload", stopLocationSharing);
 
-        if (!isAdmin) {
-          // Onload geofence check to auto-set status on load based on physical presence
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-              async (pos) => {
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
-                // Wait briefly for Firebase listeners to populate currentStudentData / hostelLocation
-                let checkCount = 0;
-                const interval = setInterval(async () => {
-                  checkCount++;
-                  if ((currentStudentData && currentStudentData.destination) || hostelLocation || checkCount > 20) {
-                    clearInterval(interval);
-                    await runGeofenceCheck(lat, lng);
-                  }
-                }, 200);
-              },
-              (err) => console.log("Onload geofence location check skipped:", err.message),
-              { enableHighAccuracy: true, timeout: 8000 }
-            );
-          }
-        }
+        // For students, location watcher is already started above (in the
+        // student data listener). The persistent watcher continuously calls
+        // runGeofenceCheck, so status auto-updates whenever the student moves
+        // between home, hostel, and anywhere else.
 
         // ─── ADMIN functions ─────────────────────────────────────────
         if (isAdmin) {
           let allStudents = {};
           let allBatches = {};
-
-          window.renderStudents = renderStudents;
-          window.createBatch = createBatch;
-          window.completeBatch = completeBatch;
-          window.adminResetStatus = adminResetStatus;
-          window.deleteStudent = deleteStudent;
-
-
 
           window.pinHostelLocation = function () {
             showLocMsg("hostelLocMsg", "Getting location...", "info");
@@ -1572,6 +1652,7 @@
             allStudents = data;
             updateStats();
             renderStudents();
+            renderBatches();
             populateBatchFilter();
           }, (error) => {
             console.error("Firebase Student Read Error:", error);
@@ -1587,18 +1668,25 @@
           });
 
           function updateStats() {
-            const s = Object.values(allStudents);
+            const s = Object.values(allStudents || {}).filter(x => x && x.id);
             document.getElementById("statTotal").textContent = s.length;
             document.getElementById("statInHostel").textContent = s.filter(x => x.status === "in_hostel").length;
             document.getElementById("statOnWay").textContent = s.filter(x => x.status === "on_way").length;
             document.getElementById("statReached").textContent = s.filter(x => x.status === "reached").length;
+            document.getElementById("statAtHome").textContent = s.filter(x => x.status === "at_home").length;
           }
 
           function renderStudents() {
             const grid = document.getElementById("studentsGrid");
-            const batch = document.getElementById("batchFilter").value;
-            const status = document.getElementById("statusFilter").value;
-            let students = Object.values(allStudents);
+            if (!grid) return;
+
+            const batchFilterEl = document.getElementById("batchFilter");
+            const batch = batchFilterEl ? batchFilterEl.value : "";
+
+            const statusFilterEl = document.getElementById("statusFilter");
+            const status = statusFilterEl ? statusFilterEl.value : "";
+
+            let students = Object.values(allStudents || {}).filter(s => s && s.id);
             if (batch) students = students.filter(s => s.batchId === batch);
             if (status) students = students.filter(s => s.status === status);
 
@@ -1606,24 +1694,52 @@
               grid.innerHTML = '<div class="empty">No students found.</div>'; return;
             }
 
-            const statusIcon = { in_hostel: '🏠', on_way: '🚶', reached: '✅' };
+            const statusIcon = { in_hostel: '🏠', on_way: '🚶', reached: '✅', at_home: '🏡' };
 
             grid.innerHTML = students.map(s => {
-              const dest = s.destination ? (s.destination.address || `${s.destination.lat?.toFixed(4)}, ${s.destination.lng?.toFixed(4)}`) : null;
+              const sName = s.name || "Unknown Student";
+              const sLetter = sName.charAt(0).toUpperCase();
+
+              let dest = null;
+              if (s.destination) {
+                const lat = parseFloat(s.destination.lat);
+                const lng = parseFloat(s.destination.lng);
+                dest = s.destination.address || (!isNaN(lat) ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : null);
+              }
+
               const updated = s.lastUpdated ? new Date(s.lastUpdated).toLocaleString() : '—';
+
+              let presence = "Unknown";
+              if (s.currentLocation && s.currentLocation.lat) {
+                const lat = s.currentLocation.lat;
+                const lng = s.currentLocation.lng;
+                if (s.destination && s.destination.lat && s.destination.lng) {
+                  if (getDistance(lat, lng, s.destination.lat, s.destination.lng) < 0.3) presence = "🏡 At Home";
+                }
+                if (presence === "Unknown" && hostelLocation && hostelLocation.lat) {
+                  if (getDistance(lat, lng, hostelLocation.lat, hostelLocation.lng) < 0.3) presence = "🏫 In Hostel";
+                }
+                if (presence === "Unknown") presence = "🚶 On the Way";
+              } else {
+                if (s.status === "at_home" || s.status === "reached") presence = "🏡 At Home";
+                else if (s.status === "in_hostel") presence = "🏫 In Hostel";
+                else presence = "🚶 On the Way";
+              }
+
               const started = s.journeyStartTime ? new Date(s.journeyStartTime).toLocaleTimeString() : null;
               const hasLoc = s.currentLocation && s.currentLocation.lat;
               return `
         <div class="stu-card ${s.status}">
           <div class="stu-card-header">
-            <div class="stu-avatar ${s.status}">${esc(s.name.charAt(0).toUpperCase())}</div>
+            <div class="stu-avatar ${s.status}">${esc(sLetter)}</div>
             <div>
-              <div class="stu-card-name">${esc(s.name)}</div>
+              <div class="stu-card-name">${esc(sName)}</div>
               <div class="stu-card-id">🆔 ${esc(s.id)}</div>
             </div>
           </div>
           <div class="stu-card-meta">
             <div class="stu-meta-row">🎓 <span>Batch:</span> ${esc(s.batchId)}</div>
+            <div class="stu-meta-row">📍 <span>Current:</span> <b>${presence}</b></div>
             ${dest ? `<div class="stu-meta-row">📍 <span>Dest:</span> ${esc(dest)}</div>` : ''}
             ${started ? `<div class="stu-meta-row">🕐 <span>Started:</span> ${started}</div>` : ''}
             <div class="stu-meta-row">🔄 <span>Updated:</span> ${updated}</div>
@@ -1649,20 +1765,22 @@
           function populateBatchFilter() {
             const select = document.getElementById("batchFilter");
             const current = select.value;
-            const ids = new Set(Object.values(allStudents).map(s => s.batchId).filter(Boolean));
+            const validStudents = Object.values(allStudents || {}).filter(s => s && s.batchId);
+            const ids = new Set(validStudents.map(s => s.batchId));
             select.innerHTML = '<option value="">All Batches</option>' +
               Array.from(ids).map(b => `<option value="${b}">${b}</option>`).join("");
-            select.value = current;
+            if (current && ids.has(current)) select.value = current;
           }
 
           function renderBatches() {
             const tbody = document.getElementById("batchTableBody");
-            const batches = Object.values(allBatches);
+            if (!tbody) return;
+            const batches = Object.values(allBatches || {});
             if (batches.length === 0) {
               tbody.innerHTML = '<tr><td colspan="4" class="empty">No batches created yet.</td></tr>'; return;
             }
             tbody.innerHTML = batches.map(b => {
-              const count = Object.values(allStudents).filter(s => s.batchId === b.id).length;
+              const count = Object.values(allStudents || {}).filter(s => s && s.batchId === b.id).length;
               return `<tr>
         <td>${esc(b.id)}</td>
         <td><span class="tbl-badge ${b.status === 'completed' ? 'reached' : 'in_hostel'}">${b.status}</span></td>
@@ -1676,16 +1794,41 @@
 
           window.createBatch = async function () {
             const id = document.getElementById("newBatchId").value.trim();
-            if (!id) return alert("Enter a batch ID.");
-            const existing = await db.ref("batches/" + id).once("value");
-            if (existing.exists()) return alert("Batch already exists.");
-            await db.ref("batches/" + id).set({ id, status: "active", createdAt: Date.now() });
-            document.getElementById("newBatchId").value = "";
+            if (!id) {
+              alert("Please enter a Batch ID.");
+              return;
+            }
+
+            // Simple validation: Alphanumeric only
+            if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+              alert("Batch ID can only contain letters, numbers, hyphens, and underscores.");
+              return;
+            }
+
+            try {
+              const existing = await db.ref("batches/" + id).once("value");
+              if (existing.exists()) {
+                alert("This Batch ID already exists.");
+                return;
+              }
+
+              await db.ref("batches/" + id).set({
+                id: id,
+                status: "active",
+                createdAt: Date.now()
+              });
+
+              alert(`Batch "${id}" created successfully!`);
+              document.getElementById("newBatchId").value = "";
+            } catch (err) {
+              console.error("Create Batch Error:", err);
+              alert("Error creating batch: " + err.message);
+            }
           };
 
           window.completeBatch = async function (batchId) {
             if (!confirm(`Mark "${batchId}" as completed and REMOVE all its students + accounts? This cannot be undone.`)) return;
-            const toRemove = Object.values(allStudents).filter(s => s.batchId === batchId);
+            const toRemove = Object.values(allStudents || {}).filter(s => s && s.batchId === batchId);
             for (const s of toRemove) {
               await db.ref("students/" + s.id).remove();
               await db.ref("users/" + s.id).remove();
@@ -1695,6 +1838,7 @@
           };
 
           window.adminResetStatus = async function (studentId) {
+            if (!confirm("Reset this student's status to 'In Hostel'? This will clear their current journey data.")) return;
             await db.ref("students/" + studentId).update({
               status: "in_hostel", destination: null,
               journeyStartTime: null, journeyEndTime: null, lastUpdated: Date.now()
@@ -1808,7 +1952,7 @@
           });
 
           function notifyStatusChange(s) {
-            const labels = { on_way: "started their journey", reached: "reached their destination", in_hostel: "returned to hostel" };
+            const labels = { on_way: "started their journey", reached: "reached their destination", at_home: "arrived at home", in_hostel: "returned to hostel" };
             const msg = `${s.name} has ${labels[s.status] || s.status}!`;
             showToast(msg, s.status);
             if (typeof voiceInterval !== 'undefined' && voiceInterval) speak(msg);
@@ -1878,8 +2022,6 @@
             const utterance = new SpeechSynthesisUtterance(text);
             window.speechSynthesis.speak(utterance);
           }
-
-          window.renderStudents = renderStudents;
         }
       }
     </script>

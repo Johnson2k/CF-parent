@@ -341,9 +341,13 @@
     // This is a standard script, but it can now call getSession() 
     // because auth.js attached it to the window.
     window.addEventListener("load", () => {
+      // Trigger location permission prompt as soon as the web is opened
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(() => { }, () => { });
+      }
       const session = getSession();
       if (session) {
-        window.location.href = "dashboard.html"; return;
+        window.location.href = session.role === "admin" ? "admin.html" : "dashboard.html"; return;
       }
       setTimeout(loadBatches, 500);
     });
@@ -359,17 +363,24 @@
         }
       }
 
-      db.ref("batches").once("value").then(snapshot => {
+      db.ref("batches").on("value", snapshot => {
         const select = document.getElementById("regBatchId");
+        const currentVal = select.value;
         const batches = snapshot.val() || {};
         const active = Object.values(batches).filter(b => b.status === "active");
+
         if (active.length === 0) {
           select.innerHTML = '<option value="">No batches available</option>';
         } else {
-          select.innerHTML = '<option value="">-- Select your batch --</option>' +
-            active.map(b => `<option value="${b.id}">${b.id}</option>`).join("");
+          let options = '<option value="">-- Select your batch --</option>';
+          options += active.map(b => `<option value="${b.id}">${b.id}</option>`).join("");
+          select.innerHTML = options;
+          // Restore selected value if it still exists
+          if (currentVal && active.find(b => b.id === currentVal)) {
+            select.value = currentVal;
+          }
         }
-      }).catch(err => {
+      }, err => {
         console.error("Load Batches Error:", err);
         document.getElementById("regBatchId").innerHTML = '<option value="">Error loading batches</option>';
       });
@@ -420,7 +431,7 @@
         const user = await loginUser(id, password);
         if (user.role !== "admin") { showMsg("adminLoginMsg", "This account is not an admin.", "error"); return; }
         showMsg("adminLoginMsg", "Login successful! Redirecting...", "success");
-        setTimeout(() => window.location.href = "dashboard.html", 600);
+        setTimeout(() => window.location.href = "admin.html", 600);
       } catch (err) {
         showMsg("adminLoginMsg", err.message, "error");
       }

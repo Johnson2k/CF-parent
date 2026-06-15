@@ -125,6 +125,28 @@
       border-left: 5px solid #1967d2;
     }
 
+    .status-card.at_home {
+      background: #e8f0fe;
+      border-left: 5px solid #6f42c1;
+    }
+
+    .sync-btn {
+      background: rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #555;
+      margin-top: 8px;
+    }
+
+    .status-card.at_home {
+      background: #f3f0ff;
+      border-left: 5px solid #6f42c1;
+    }
+
     .status-icon {
       font-size: 36px;
     }
@@ -160,6 +182,11 @@
 
     .badge.reached {
       background: #1967d2;
+      color: #fff;
+    }
+
+    .badge.at_home {
+      background: #6f42c1;
       color: #fff;
     }
 
@@ -352,6 +379,8 @@
       <div class="avatar" id="avatarLetter">?</div>
       <div class="profile-info">
         <div class="name" id="studentName">Loading...</div>
+        <div id="presenceStatus" style="font-size: 14px; margin-top: 4px; opacity: 0.95; font-weight: 600;">Presence: —
+        </div>
         <div class="meta">
           <span>🎓 Batch: <b id="batchId">—</b></span>
           <span>🆔 ID: <b id="studentId">—</b></span>
@@ -366,6 +395,7 @@
         <div class="status-text">
           <div class="title" id="statusTitle">In Hostel</div>
           <div class="sub" id="statusSub">You are currently at the hostel</div>
+          <button class="sync-btn" onclick="syncStatusWithLocation()">🔄 Sync Location & Status</button>
         </div>
       </div>
       <span class="badge in_hostel" id="statusBadge">In Hostel</span>
@@ -401,15 +431,18 @@
       <div class="dest-set" id="destSetMsg">📍 <span id="destSetText"></span></div>
 
       <div class="btn-row">
-        <button class="btn btn-pin" onclick="useCurrentLocationAsDestination()">📍 Pin My Location as
+        <button class="btn btn-pin" onclick="window.useCurrentLocationAsDestination()">📍 Pin My Location as
           Destination</button>
       </div>
       <div class="btn-row">
-        <button class="btn btn-start" id="startBtn" onclick="startJourney()">🚶 Start Journey</button>
-        <button class="btn btn-stop" id="stopBtn" onclick="markReached()" style="display:none;">✅ I've Reached</button>
+        <button class="btn btn-start" id="startBtn" onclick="window.startJourney()">🚶 Start Journey</button>
+        <button class="btn btn-stop" id="atHomeBtn" onclick="window.markReached()"
+          style="display:none; background:#6f42c1;">🏡 I am at Home Now</button>
+        <button class="btn btn-stop" id="stopBtn" onclick="window.markReached()" style="display:none;">✅ I've Reached
+          Destination</button>
       </div>
       <div class="btn-row" id="resetRow" style="display:none;">
-        <button class="btn btn-reset" onclick="resetJourney()">🔄 Reset / Go Back to Hostel</button>
+        <button class="btn btn-reset" onclick="window.resetJourney()">🔄 Reset / Go Back to Hostel</button>
       </div>
 
       <div class="msg" id="actionMsg"></div>
@@ -423,17 +456,33 @@
 
   </div>
 
-  <script type="module" src="js/firebase.js"></script>
-  <script type="module" src="js/db.js"></script>
-  <script type="module" src="js/auth.js"></script>
+  <script src="js/firebase.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/auth.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    const session = requireRole("parent");
+    const session = typeof requireRole === "function" ? requireRole("parent") : null;
     let studentId = session ? session.id : null;
     let watchId = null;
     let map, marker, destMarker, line;
     let currentStudentData = {};
+    let hostelLocation = null;
+
+    db.ref("hostel").on("value", (snap) => {
+      hostelLocation = snap.val();
+    });
+
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
 
     document.getElementById("headerUser").textContent = "Logged in as: " + studentId;
     document.getElementById("studentId").textContent = studentId;
@@ -441,7 +490,8 @@
     const statusConfig = {
       in_hostel: { icon: "🏠", title: "In Hostel", sub: "You are currently at the hostel", badge: "In Hostel" },
       on_way: { icon: "🚶", title: "On the Way", sub: "Your live location is being shared", badge: "On the Way" },
-      reached: { icon: "✅", title: "Reached Destination", sub: "You have arrived at your destination", badge: "Reached" }
+      reached: { icon: "✅", title: "Reached Destination", sub: "You have arrived at your destination", badge: "Reached" },
+      at_home: { icon: "🏡", title: "At Home", sub: "You are safely at home", badge: "At Home" }
     };
 
     db.ref("students/" + studentId).on("value", (snapshot) => {
@@ -449,13 +499,42 @@
       if (!data) return;
       currentStudentData = data;
       renderDashboard(data);
+
+      // Ensure location monitoring is active for automatic geofencing
+      startLocationSharing();
+
+      // Automatically sync status on entry
+      setTimeout(() => {
+        if (typeof window.syncStatusWithLocation === 'function') window.syncStatusWithLocation();
+      }, 1000);
     });
+
+    window.db = db;
 
     function renderDashboard(data) {
       // Profile
-      document.getElementById("studentName").textContent = data.name;
-      document.getElementById("avatarLetter").textContent = data.name.charAt(0).toUpperCase();
+      const sName = data.name || studentId || "Student";
+      document.getElementById("studentName").textContent = sName;
+      document.getElementById("avatarLetter").textContent = sName.charAt(0).toUpperCase();
       document.getElementById("batchId").textContent = data.batchId;
+
+      let presenceText = "Unknown";
+      if (data.currentLocation && data.currentLocation.lat) {
+        const lat = data.currentLocation.lat;
+        const lng = data.currentLocation.lng;
+        if (data.destination && data.destination.lat && getDistance(lat, lng, data.destination.lat, data.destination.lng) < 0.3) {
+          presenceText = "🏡 At Home";
+        } else if (hostelLocation && getDistance(lat, lng, hostelLocation.lat, hostelLocation.lng) < 0.3) {
+          presenceText = "🏫 In Hostel";
+        } else {
+          presenceText = "🚶 On the Way";
+        }
+      } else {
+        if (data.status === "at_home" || data.status === "reached") presenceText = "🏡 At Home";
+        else if (data.status === "on_way") presenceText = "🚶 On the Way";
+        else presenceText = "🏫 In Hostel";
+      }
+      document.getElementById("presenceStatus").innerHTML = `Presence: <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px; font-weight: 700;">${presenceText}</span>`;
 
       // Status card
       const cfg = statusConfig[data.status] || statusConfig.in_hostel;
@@ -484,10 +563,29 @@
         document.getElementById("destSetMsg").style.display = "none";
       }
 
-      // Buttons
-      document.getElementById("startBtn").style.display = data.status === "on_way" ? "none" : "flex";
-      document.getElementById("stopBtn").style.display = data.status === "on_way" ? "flex" : "none";
-      document.getElementById("resetRow").style.display = data.status === "reached" ? "flex" : "none";
+      // Journey Controls Visibility
+      const status = data.status || "in_hostel";
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const atHomeBtn = document.getElementById("atHomeBtn");
+      const resetRow = document.getElementById("resetRow");
+
+      if (status === "on_way") {
+        startBtn.style.display = "none";
+        stopBtn.style.display = "flex";
+        atHomeBtn.style.display = "flex";
+        resetRow.style.display = "none";
+      } else if (status === "at_home" || status === "reached") {
+        startBtn.style.display = "none";
+        stopBtn.style.display = "none";
+        atHomeBtn.style.display = "none";
+        resetRow.style.display = "flex";
+      } else {
+        startBtn.style.display = "flex";
+        stopBtn.style.display = "none";
+        atHomeBtn.style.display = "none";
+        resetRow.style.display = "none";
+      }
 
       // Map
       initOrUpdateMap(data);
@@ -540,7 +638,74 @@
       });
     }
 
-    async function useCurrentLocationAsDestination() {
+    async function runGeofenceCheck(lat, lng) {
+      if (!currentStudentData) return;
+
+      let nearHome = false;
+      let nearHostel = false;
+
+      // Check distance to home (destination)
+      if (currentStudentData.destination && currentStudentData.destination.lat) {
+        const distHome = getDistance(lat, lng, currentStudentData.destination.lat, currentStudentData.destination.lng);
+        if (distHome < 0.3) nearHome = true;
+      }
+
+      // Check distance to hostel
+      if (hostelLocation && hostelLocation.lat) {
+        const distHostel = getDistance(lat, lng, hostelLocation.lat, hostelLocation.lng);
+        if (distHostel < 0.3) nearHostel = true;
+      }
+
+      if (nearHome) {
+        if (currentStudentData.status !== "at_home") {
+          await db.ref("students/" + studentId).update({
+            status: "at_home",
+            journeyEndTime: Date.now(),
+            lastUpdated: Date.now()
+          });
+        }
+      } else if (nearHostel) {
+        if (currentStudentData.status !== "in_hostel") {
+          await db.ref("students/" + studentId).update({
+            status: "in_hostel",
+            journeyStartTime: null,
+            journeyEndTime: null,
+            lastUpdated: Date.now()
+          });
+        }
+      } else {
+        // Outside safe zones - auto-transition to on_way
+        if (currentStudentData.status !== "on_way") {
+          await db.ref("students/" + studentId).update({
+            status: "on_way",
+            journeyStartTime: currentStudentData.journeyStartTime || Date.now(),
+            journeyEndTime: null,
+            lastUpdated: Date.now()
+          });
+        }
+      }
+    }
+
+    window.syncStatusWithLocation = function () {
+      showMsg("Requesting location permission...", "info");
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          showMsg("Location synced!", "success");
+          await runGeofenceCheck(lat, lng);
+          // Persist current location so Presence indicator updates immediately
+          await db.ref("students/" + studentId).update({
+            currentLocation: { lat, lng, timestamp: Date.now() },
+            lastUpdated: Date.now()
+          });
+        },
+        (err) => showMsg("Location error: " + err.message, "error"),
+        { enableHighAccuracy: true }
+      );
+    };
+
+    window.useCurrentLocationAsDestination = async function () {
       showMsg("Getting your current location...", "info");
       try {
         const pos = await getCurrentPosition();
@@ -550,12 +715,13 @@
           lastUpdated: Date.now()
         });
         showMsg("Destination pinned successfully!", "success");
+        syncStatusWithLocation();
       } catch (err) {
         showMsg("Error: " + err.message, "error");
       }
     }
 
-    async function startJourney() {
+    window.startJourney = async function () {
       if (!currentStudentData.destination) { showMsg("Please set a destination first.", "error"); return; }
       showMsg("Starting journey...", "info");
       await db.ref("students/" + studentId).update({
@@ -574,6 +740,7 @@
             currentLocation: { lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now() },
             lastUpdated: Date.now()
           });
+          runGeofenceCheck(pos.coords.latitude, pos.coords.longitude);
         },
         (err) => showMsg("Location error: " + err.message, "error"),
         { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
@@ -584,27 +751,21 @@
       if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
     }
 
-    async function markReached() {
+    window.markReached = async function () {
       await db.ref("students/" + studentId).update({
-        status: "reached", journeyEndTime: Date.now(), lastUpdated: Date.now()
+        status: "at_home", journeyEndTime: Date.now(), lastUpdated: Date.now()
       });
-      stopLocationSharing();
       showMsg("You've been marked as reached. Safe travels! 🎉", "success");
     }
 
-    async function resetJourney() {
+    window.resetJourney = async function () {
+      if (!confirm("Are you sure you want to reset your status to 'In Hostel'? This will clear your current journey and destination data.")) return;
       await db.ref("students/" + studentId).update({
         status: "in_hostel", destination: null, journeyStartTime: null,
         journeyEndTime: null, currentLocation: null, lastUpdated: Date.now()
       });
       showMsg("Status reset to In Hostel.", "info");
     }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      db.ref("students/" + studentId).once("value").then(snap => {
-        if (snap.val()?.status === "on_way") startLocationSharing();
-      });
-    });
 
     window.addEventListener("beforeunload", stopLocationSharing);
   </script>
