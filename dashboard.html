@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -1296,6 +1296,8 @@
             if (document.getElementById("hostelAddress")) document.getElementById("hostelAddress").value = hostelLocation.address || "";
             if (document.getElementById("hostelLocationText")) document.getElementById("hostelLocationText").textContent = txt;
             if (document.getElementById("hostelLocationSet")) document.getElementById("hostelLocationSet").style.display = "block";
+          } else if (!isAdmin && currentStudentData && typeof renderStudentDashboard === 'function') {
+            renderStudentDashboard(currentStudentData);
           }
         });
 
@@ -1771,24 +1773,105 @@
           }
 
           if (nearHome && currentStudentData.status !== "at_home") {
+            const endTime = Date.now();
             await db.ref("students/" + userId).update({
-              status: "at_home", journeyEndTime: Date.now(), lastUpdated: Date.now()
+              status: "at_home", journeyEndTime: endTime, lastUpdated: endTime
             });
+            const journeyId = currentStudentData.currentJourneyId;
+            if (journeyId) {
+              await db.ref("journeyHistory/" + userId + "/" + journeyId).update({
+                endTime: endTime,
+                status: "completed"
+              });
+            }
           } else if (!nearHome && nearHostel && currentStudentData.status !== "in_hostel") {
-            await db.ref("students/" + userId).update({
-              status: "in_hostel", journeyStartTime: null, journeyEndTime: null, lastUpdated: Date.now()
-            });
+            // Prevent immediate reset: only auto-reset if journey started > 10 minutes ago
+            const timeSinceStart = currentStudentData.journeyStartTime ? (Date.now() - currentStudentData.journeyStartTime) : 0;
+            if (!currentStudentData.journeyStartTime || timeSinceStart > 600000) {
+              await db.ref("students/" + userId).update({
+                status: "in_hostel",
+                journeyStartTime: null,
+                journeyEndTime: null,
+                currentLocation: null,
+                lastUpdated: Date.now()
+              });
+            }
           } else if (!nearHome && !nearHostel && currentStudentData.status === "in_hostel" && currentStudentData.destination) {
+            const journeyId = Date.now().toString();
             await db.ref("students/" + userId).update({
-              status: "on_way", journeyStartTime: Date.now(), journeyEndTime: null, lastUpdated: Date.now()
+              status: "on_way",
+              journeyStartTime: Date.now(),
+              journeyEndTime: null,
+              currentJourneyId: journeyId,
+              lastUpdated: Date.now()
+            });
+            await db.ref("journeyHistory/" + userId + "/" + journeyId).set({
+              startTime: Date.now(),
+              destination: currentStudentData.destination,
+              status: "on_way"
             });
           } else if (!nearHome && !nearHostel && currentStudentData.status === "at_home") {
-            // Student left home â€” mark on_way
+            // Student left home — mark on_way
+            const journeyId = Date.now().toString();
             await db.ref("students/" + userId).update({
-              status: "on_way", journeyStartTime: Date.now(), journeyEndTime: null, lastUpdated: Date.now()
+              status: "on_way",
+              journeyStartTime: Date.now(),
+              journeyEndTime: null,
+              currentJourneyId: journeyId,
+              lastUpdated: Date.now()
+            });
+            await db.ref("journeyHistory/" + userId + "/" + journeyId).set({
+              startTime: Date.now(),
+              destination: { lat: hostelLocation?.lat || 13.0827, lng: hostelLocation?.lng || 80.2707, address: "Hostel" },
+              status: "on_way"
             });
           }
         }
+
+        // Offline queue variables
+        const offlineQueueKey = "cf_offline_gps_queue_" + userId;
+        function getOfflineQueue() {
+          try {
+            return JSON.parse(localStorage.getItem(offlineQueueKey) || "[]");
+          } catch(e) { return []; }
+        }
+        function saveOfflineQueue(queue) {
+          localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
+        }
+
+        async function syncOfflineQueue() {
+          if (!navigator.onLine) return;
+          const queue = getOfflineQueue();
+          if (queue.length === 0) return;
+
+          showLocMsg("journeyLocMsg", `Syncing ${queue.length} offline locations...`, "info");
+          try {
+            // Send coordinates to Firebase (e.g. update latest location and push to history if desired)
+            // We'll update the current location to the last recorded point in the queue
+            const lastPoint = queue[queue.length - 1];
+            await db.ref("students/" + userId).update({
+              currentLocation: {
+                lat: lastPoint.lat,
+                lng: lastPoint.lng,
+                timestamp: lastPoint.timestamp
+              },
+              lastUpdated: Date.now()
+            });
+
+            // Additionally we can push these track logs to a subpath if tracking is enabled
+            // For now, updating the student's status/current location resolves it.
+            
+            // Clear queue
+            saveOfflineQueue([]);
+            showLocMsg("journeyLocMsg", "All offline locations successfully synced! ✅", "success");
+            setTimeout(() => { showLocMsg("journeyLocMsg", "", ""); }, 4000);
+          } catch(e) {
+            console.error("Offline sync failed:", e);
+          }
+        }
+
+        // Auto sync when back online
+        window.addEventListener("online", syncOfflineQueue);
 
         function startLocationSharing() {
           if (watchId !== null) return;
@@ -1797,14 +1880,29 @@
             return;
           }
           watchId = navigator.geolocation.watchPosition(
-            (pos) => {
+            async (pos) => {
               const lat = pos.coords.latitude;
               const lng = pos.coords.longitude;
+              const timestamp = Date.now();
+
+              if (!navigator.onLine) {
+                // Device is offline - queue the location
+                const queue = getOfflineQueue();
+                queue.push({ lat, lng, timestamp });
+                if (queue.length > 100) queue.shift(); // Cap the size
+                saveOfflineQueue(queue);
+                showLocMsg("journeyLocMsg", `Offline: Saved location to queue (${queue.length}) 📵`, "info");
+                runGeofenceCheck(lat, lng);
+                return;
+              }
+
+              // Device is online - sync queue first, then update
+              await syncOfflineQueue();
               db.ref("students/" + userId).update({
                 currentLocation: {
                   lat: lat,
                   lng: lng,
-                  timestamp: Date.now()
+                  timestamp: timestamp
                 },
                 lastUpdated: Date.now()
               });
@@ -1948,7 +2046,7 @@
 
             grid.className = 'students-grid';
             grid.innerHTML = students.map(s => {
-              const sName = s.name || "Unknown Student";
+              const sName = s.name || s.studentName || s.id || "Unknown Student";
               const sLetter = sName.charAt(0).toUpperCase();
 
               let dest = null;
@@ -2110,12 +2208,19 @@
 
             if (isOpen) {
               mapEl.classList.remove('open');
-              mapEl.innerHTML = '';
-              btn.textContent = '📍 Track';
               if (cardMaps[studentId]) {
                 cardMaps[studentId].ref.off();
+                if (cardMaps[studentId].map) {
+                  try {
+                    cardMaps[studentId].map.remove();
+                  } catch (e) {
+                    console.warn(e);
+                  }
+                }
                 delete cardMaps[studentId];
               }
+              mapEl.innerHTML = '';
+              btn.textContent = '📍 Track';
               return;
             }
 
@@ -2151,15 +2256,16 @@
 
               const lat = data.currentLocation.lat;
               const lng = data.currentLocation.lng;
+              const sName = data.name || data.studentName || data.id || "Student";
 
               const icon = L.divIcon({
                 className: '',
-                html: `<div style="background:${data.status === 'on_way' ? '#e6a800' : '#27ae60'};color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.25);">${esc(data.name.charAt(0).toUpperCase())}</div>`,
+                html: `<div style="background:${data.status === 'on_way' ? '#e6a800' : '#27ae60'};color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.25);">${esc(sName.charAt(0).toUpperCase())}</div>`,
                 iconSize: [34, 34], iconAnchor: [17, 17]
               });
 
               const mk = L.marker([lat, lng], { icon }).addTo(m);
-              mk.bindPopup(`<b>${esc(data.name)}</b><br>${esc(statusLabel(data.status))}<br>${new Date(data.currentLocation.timestamp).toLocaleTimeString()}`).openPopup();
+              mk.bindPopup(`<b>${esc(sName)}</b><br>${esc(statusLabel(data.status))}<br>${new Date(data.currentLocation.timestamp).toLocaleTimeString()}`).openPopup();
               markers[studentId] = mk;
 
               const bounds = [[lat, lng]];
@@ -2178,7 +2284,11 @@
                 bounds.push([data.destination.lat, data.destination.lng]);
               }
 
-              m.fitBounds(bounds, { padding: [30, 30] });
+              if (bounds.length > 1) {
+                m.fitBounds(bounds, { padding: [30, 30] });
+              } else {
+                m.setView([lat, lng], 15);
+              }
               setTimeout(() => m.invalidateSize(), 200);
             });
 
@@ -2279,38 +2389,87 @@
           const btn = document.getElementById('sosBtn');
           const msg = document.getElementById('sosMsg');
           btn.disabled = true;
-          btn.textContent = 'Sending SOS...';
+          btn.textContent = 'Recording Emergency Audio...';
           msg.className = 'loc-msg info';
-          msg.textContent = 'Getting your location...';
-          const write = async (lat, lng) => {
-            await db.ref('sos/' + userId).set({
-              studentId: userId,
-              name: currentStudentData.name || userId,
-              batchId: currentStudentData.batchId || '',
-              lat: lat || null,
-              lng: lng || null,
-              timestamp: Date.now(),
-              resolved: false
-            });
-            const locText = lat ? 'Location attached' : 'No GPS - sent without location';
-            btn.textContent = 'SOS Sent! Admin Notified';
-            msg.className = lat ? 'loc-msg success' : 'loc-msg error';
-            msg.textContent = 'SOS alert sent. ' + locText;
-            setTimeout(() => { btn.disabled = false; btn.textContent = 'SEND SOS - I Need Help'; msg.className = 'loc-msg'; }, 30000);
-          };
-          if (!navigator.geolocation) { await write(null, null); return; }
-          navigator.geolocation.getCurrentPosition(
-            (pos) => write(pos.coords.latitude, pos.coords.longitude),
-            () => {
-              msg.textContent = 'High accuracy failed, trying network location...';
-              navigator.geolocation.getCurrentPosition(
-                (pos) => write(pos.coords.latitude, pos.coords.longitude),
-                () => { msg.textContent = 'GPS unavailable, sending without location...'; write(null, null); },
-                { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-              );
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-          );
+          msg.textContent = 'Initializing microphone & GPS...';
+
+          let audioBase64 = null;
+          let mediaRecorder = null;
+          let audioChunks = [];
+
+          // Try to record audio first (capture 8 seconds of ambient sound)
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = (e) => {
+              if (e.data.size > 0) audioChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+              const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+              
+              // Convert blob to base64 string
+              const reader = new FileReader();
+              reader.readAsDataURL(audioBlob);
+              reader.onloadend = () => {
+                audioBase64 = reader.result;
+                // Once audio is base64 encoded, send the SOS with audio
+                triggerSOSSend(audioBase64);
+              };
+
+              // Stop all audio tracks to release microphone
+              stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            // Record for 8 seconds
+            setTimeout(() => {
+              if (mediaRecorder.state !== "inactive") {
+                mediaRecorder.stop();
+              }
+            }, 8000);
+
+          } catch (err) {
+            console.warn("Microphone access denied or failed:", err);
+            msg.textContent = 'Microphone failed. Sending SOS with GPS only...';
+            // Send SOS immediately without audio
+            triggerSOSSend(null);
+          }
+
+          async function triggerSOSSend(audioData) {
+            const write = async (lat, lng) => {
+              await db.ref('sos/' + userId).set({
+                studentId: userId,
+                name: currentStudentData.name || userId,
+                batchId: currentStudentData.batchId || '',
+                lat: lat || null,
+                lng: lng || null,
+                timestamp: Date.now(),
+                resolved: false,
+                audioClip: audioData || null
+              });
+              const locText = lat ? 'Location attached' : 'No GPS';
+              const audioText = audioData ? 'Ambient audio recorded & attached 🎙️' : 'No audio';
+              btn.textContent = 'SOS Sent! Admin Notified';
+              msg.className = lat ? 'loc-msg success' : 'loc-msg error';
+              msg.textContent = `SOS alert sent. ${locText}. ${audioText}.`;
+              setTimeout(() => { btn.disabled = false; btn.textContent = 'SEND SOS - I Need Help'; msg.className = 'loc-msg'; }, 30000);
+            };
+
+            if (!navigator.geolocation) { await write(null, null); return; }
+            navigator.geolocation.getCurrentPosition(
+              (pos) => write(pos.coords.latitude, pos.coords.longitude),
+              () => {
+                msg.textContent = 'High accuracy failed, trying network location...';
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => write(pos.coords.latitude, pos.coords.longitude),
+                  () => { msg.textContent = 'GPS unavailable, sending without location...'; write(null, null); },
+                  { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+                );
+              },
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+          }
         };
       }
     </script>

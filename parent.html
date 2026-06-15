@@ -460,7 +460,6 @@
   </div>
 
   <script src="js/firebase.js"></script>
-  <script src="js/db.js"></script>
   <script src="js/auth.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -474,6 +473,9 @@
 
     db.ref("hostel").on("value", (snap) => {
       hostelLocation = snap.val();
+      if (currentStudentData && typeof renderDashboard === 'function') {
+        renderDashboard(currentStudentData);
+      }
     });
 
     function getDistance(lat1, lon1, lat2, lon2) {
@@ -516,7 +518,7 @@
 
     function renderDashboard(data) {
       // Profile
-      const sName = data.name || studentId || "Student";
+      const sName = data.name || data.studentName || studentId || "Student";
       document.getElementById("studentName").textContent = sName;
       document.getElementById("avatarLetter").textContent = sName.charAt(0).toUpperCase();
       document.getElementById("batchId").textContent = data.batchId;
@@ -623,6 +625,8 @@
           line = L.polyline([[lat, lng], [data.destination.lat, data.destination.lng]], { color: '#1e3c72', dashArray: '6,6', weight: 2 }).addTo(map);
           map.fitBounds([[lat, lng], [data.destination.lat, data.destination.lng]], { padding: [40, 40] });
         } else {
+          if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+          if (line) { map.removeLayer(line); line = null; }
           map.setView([lat, lng], 14);
         }
       }
@@ -671,12 +675,17 @@
         }
       } else if (nearHostel) {
         if (currentStudentData.status !== "in_hostel") {
-          await db.ref("students/" + studentId).update({
-            status: "in_hostel",
-            journeyStartTime: null,
-            journeyEndTime: null,
-            lastUpdated: Date.now()
-          });
+          // Prevent immediate reset: only auto-reset if journey started > 10 minutes ago
+          const timeSinceStart = currentStudentData.journeyStartTime ? (Date.now() - currentStudentData.journeyStartTime) : 0;
+          if (!currentStudentData.journeyStartTime || timeSinceStart > 600000) {
+            await db.ref("students/" + studentId).update({
+              status: "in_hostel",
+              journeyStartTime: null,
+              journeyEndTime: null,
+              currentLocation: null,
+              lastUpdated: Date.now()
+            });
+          }
         }
       } else {
         // Outside safe zones - only auto-transition to on_way if coming FROM hostel

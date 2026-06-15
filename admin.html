@@ -526,6 +526,17 @@
 
     <div class="stats" id="batchStats" style="margin-top:-10px;"></div>
 
+    <!-- Live Alerts & Notifications Log -->
+    <div class="section" id="notificationsLogSection" style="margin-bottom: 20px;">
+      <h2 style="display:flex; justify-content:space-between; align-items:center;">
+        <span>🔔 Live Journey Notifications</span>
+        <button class="small-btn grey" onclick="clearNotificationsLog()" style="font-size:12px; padding:4px 10px;">Clear Log</button>
+      </h2>
+      <div id="notificationsLogList" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+        <div style="color: #999; text-align: center; padding: 10px 0; font-size: 13px;">No recent status updates.</div>
+      </div>
+    </div>
+
     <!-- Map Panel (hidden by default, shown when Track is clicked) -->
     <div class="section" id="mapSection" style="display:none;">
       <h2 style="display:flex;justify-content:space-between;align-items:center;">
@@ -542,8 +553,10 @@
         <input type="text" id="placeNameInput" placeholder="Place name (e.g. Hostel, Office)" style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none;">
         <input type="text" id="placeSearchInput" placeholder="Search address..." style="flex:2;min-width:180px;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none;" onkeydown="if(event.key==='Enter')searchAndAddPlace()">
         <button class="small-btn" style="background:#27ae60;padding:9px 14px;font-size:13px;" onclick="searchAndAddPlace()">🔍 Search & Add</button>
+        <button class="small-btn" style="background:#1e3c72;padding:9px 14px;font-size:13px;" onclick="togglePlacesMap()">🗺️ Map View</button>
       </div>
       <div id="placeMsg" style="font-size:13px;margin-bottom:8px;"></div>
+      <div id="placesPickMap" style="height:280px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd; display:none;"></div>
       <div id="placesList"><div class="empty">No places added yet.</div></div>
     </div>
 
@@ -775,14 +788,102 @@
     }
 
     // Listen to students in real-time
+    let previousStudents = null;
     db.ref("students").on("value", (snapshot) => {
-      allStudents = snapshot.val() || {};
+      const data = snapshot.val() || {};
+      
+      // Check for status changes
+      if (previousStudents) {
+        for (let id in data) {
+          if (data[id] && previousStudents[id] && previousStudents[id].status !== data[id].status) {
+            addNotificationItem(data[id], previousStudents[id].status);
+          }
+        }
+      }
+      previousStudents = JSON.parse(JSON.stringify(data));
+
+      allStudents = data;
       updateStats();
       renderStudents();
       renderBatches();
       updateMap();
       populateBatchFilter();
     });
+
+    // Notifications List Logic
+    const notificationsKey = "cf_admin_notifications";
+    let activeNotifications = JSON.parse(localStorage.getItem(notificationsKey) || "[]");
+
+    function renderNotificationsLog() {
+      const listEl = document.getElementById("notificationsLogList");
+      if (!listEl) return;
+      if (activeNotifications.length === 0) {
+        listEl.innerHTML = '<div style="color: #999; text-align: center; padding: 10px 0; font-size: 13px;">No recent status updates.</div>';
+        return;
+      }
+      
+      const statusIcon = { in_hostel: '🏠', on_way: '🚶', reached: '✅', at_home: '🏡' };
+      const statusLabel = { in_hostel: 'In Hostel', on_way: 'On the Way', reached: 'Reached', at_home: 'At Home' };
+
+      listEl.innerHTML = activeNotifications.map(n => {
+        const time = new Date(n.timestamp).toLocaleTimeString();
+        return `
+          <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--th-bg); border-left:4px solid ${n.color}; border-radius:6px; font-size:13px;">
+            <span style="font-size:16px;">${statusIcon[n.status] || '🔔'}</span>
+            <span style="flex:1; color:var(--text);">
+              <b>${esc(n.studentName)}</b> (${esc(n.batchId)}) changed status to <span style="font-weight:700; color:${n.color};">${statusLabel[n.status]}</span>
+            </span>
+            <span style="font-size:11px; color:var(--text-muted);">${time}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function addNotificationItem(student, oldStatus) {
+      const colors = { in_hostel: '#27ae60', on_way: '#e6a800', reached: '#1967d2', at_home: '#6f42c1' };
+      const notification = {
+        id: Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+        studentId: student.id,
+        studentName: student.name || student.studentName || student.id || "Unknown",
+        batchId: student.batchId || "N/A",
+        status: student.status,
+        oldStatus: oldStatus,
+        color: colors[student.status] || '#888',
+        timestamp: Date.now()
+      };
+
+      // Add to array, keep last 20
+      activeNotifications.unshift(notification);
+      if (activeNotifications.length > 20) activeNotifications.pop();
+      localStorage.setItem(notificationsKey, JSON.stringify(activeNotifications));
+
+      renderNotificationsLog();
+
+      // Trigger standard audio notification beep
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      } catch (e) {}
+    }
+
+    window.clearNotificationsLog = function() {
+      if (!confirm("Clear notifications log?")) return;
+      activeNotifications = [];
+      localStorage.setItem(notificationsKey, JSON.stringify(activeNotifications));
+      renderNotificationsLog();
+    };
+
+    // Render immediately on load
+    renderNotificationsLog();
 
     // Listen to batches
     db.ref("batches").on("value", (snapshot) => {
@@ -845,7 +946,7 @@
       }
 
       tbody.innerHTML = students.map(s => {
-        const sName = s.name || "Unknown";
+        const sName = s.name || s.studentName || s.id || "Unknown";
         const sBatch = s.batchId || "N/A";
 
         let dest = "—";
@@ -894,7 +995,7 @@
       // Card view
       const grid = document.getElementById('studentsGrid');
       grid.innerHTML = students.map(s => {
-        const sName = s.name || 'Unknown';
+        const sName = s.name || s.studentName || s.id || 'Unknown';
         let presence = '—';
         if (s.currentLocation && s.currentLocation.lat) {
           const { lat, lng } = s.currentLocation;
@@ -1096,7 +1197,8 @@
 
       const mapSection = document.getElementById("mapSection");
       mapSection.style.display = "block";
-      document.getElementById("trackingName").textContent = s.name + " (" + s.batchId + ")";
+      const sName = s.name || s.studentName || s.id || "Student";
+      document.getElementById("trackingName").textContent = sName + " (" + s.batchId + ")";
       mapSection.scrollIntoView({ behavior: "smooth", block: "start" });
 
       initMap();
@@ -1112,7 +1214,7 @@
 
         const lat = data.currentLocation?.lat;
         const lng = data.currentLocation.lng;
-        const sName = data.name || "Student";
+        const sName = data.name || data.studentName || data.id || "Student";
         const sLetter = sName.charAt(0).toUpperCase();
 
         const icon = L.divIcon({
@@ -1123,7 +1225,7 @@
 
         const m = L.marker([lat, lng], { icon }).addTo(map);
         m.bindPopup(
-          `<b>${esc(data.name)}</b><br>Batch: ${esc(data.batchId)}<br>Status: ${esc(statusLabel(data.status))}<br>Updated: ${new Date(data.currentLocation.timestamp).toLocaleTimeString()}`
+          `<b>${esc(sName)}</b><br>Batch: ${esc(data.batchId)}<br>Status: ${esc(statusLabel(data.status))}<br>Updated: ${new Date(data.currentLocation.timestamp).toLocaleTimeString()}`
         ).openPopup();
         markers[data.id] = m;
 
@@ -1136,7 +1238,7 @@
             iconSize: [30, 30], iconAnchor: [15, 15]
           });
           const dm = L.marker([data.destination.lat, data.destination.lng], { icon: destIcon }).addTo(map);
-          dm.bindPopup(`${esc(data.name)}'s destination: ${esc(data.destination.address || '')}`);
+          dm.bindPopup(`${esc(sName)}'s destination: ${esc(data.destination.address || '')}`);
           markers[data.id + "_dest"] = dm;
 
           const line = L.polyline([[lat, lng], [data.destination.lat, data.destination.lng]], { color: '#1e3c72', dashArray: '6,6', weight: 2 }).addTo(map);
@@ -1144,7 +1246,11 @@
           bounds.push([data.destination.lat, data.destination.lng]);
         }
 
-        map.fitBounds(bounds, { padding: [50, 50] });
+        if (bounds.length > 1) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+        } else {
+          map.setView([lat, lng], 15);
+        }
         setTimeout(() => map.invalidateSize(), 200);
       });
     }
@@ -1263,12 +1369,100 @@
 
     // ===== PLACES =====
     let placeMarkers = {};
+    let placesMapInstance = null;
+    let temporaryPlaceMarker = null;
 
     db.ref('places').on('value', snap => {
       const places = snap.val() || {};
       renderPlacesList(places);
       updatePlaceMarkers(places);
+      updatePlacesPickMapMarkers(places);
     });
+
+    function togglePlacesMap() {
+      const mapEl = document.getElementById('placesPickMap');
+      const isOpen = mapEl.style.display === 'block';
+
+      if (isOpen) {
+        mapEl.style.display = 'none';
+        return;
+      }
+
+      mapEl.style.display = 'block';
+
+      if (placesMapInstance) {
+        setTimeout(() => placesMapInstance.invalidateSize(), 100);
+        return;
+      }
+
+      // Initialize map
+      placesMapInstance = L.map('placesPickMap').setView([13.0827, 80.2707], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(placesMapInstance);
+
+      placesMapInstance.on('click', async (e) => {
+        const { lat, lng } = e.latlng;
+        if (temporaryPlaceMarker) placesMapInstance.removeLayer(temporaryPlaceMarker);
+        temporaryPlaceMarker = L.marker([lat, lng]).addTo(placesMapInstance)
+          .bindPopup('📍 Selected Location<br><button class="small-btn green" style="margin-top:5px;font-size:11px;" onclick="addPlaceFromCoordinates(' + lat + ',' + lng + ')">Save This Spot</button>')
+          .openPopup();
+      });
+
+      db.ref('places').once('value').then(snap => {
+        updatePlacesPickMapMarkers(snap.val() || {});
+      });
+      setTimeout(() => placesMapInstance.invalidateSize(), 100);
+    }
+
+    let placesPickMarkers = {};
+    function updatePlacesPickMapMarkers(places) {
+      if (!placesMapInstance) return;
+      Object.values(placesPickMarkers).forEach(m => placesMapInstance.removeLayer(m));
+      placesPickMarkers = {};
+      Object.values(places).forEach(p => {
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="background:#27ae60;color:#fff;border-radius:6px;padding:3px 6px;font-size:11px;font-weight:800;white-space:nowrap;border:1px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);">${esc(p.icon || '📍')} ${esc(p.name)}</div>`,
+          iconAnchor: [0, 0]
+        });
+        const m = L.marker([p.lat, p.lng], { icon }).addTo(placesMapInstance);
+        m.bindPopup(`<b>${esc(p.icon || '📍')} ${esc(p.name)}</b>`);
+        placesPickMarkers[p.id] = m;
+      });
+    }
+
+    window.addPlaceFromCoordinates = async function(lat, lng) {
+      const nameInput = document.getElementById('placeNameInput');
+      const name = nameInput.value.trim();
+      const msgEl = document.getElementById('placeMsg');
+      if (!name) {
+        msgEl.style.color = '#e74c3c';
+        msgEl.textContent = 'Please enter a Place Name above before saving.';
+        return;
+      }
+
+      msgEl.style.color = '#888';
+      msgEl.textContent = 'Saving location...';
+      try {
+        const icon = name.toLowerCase().includes('hostel') ? '🏫' : name.toLowerCase().includes('office') ? '🏢' : name.toLowerCase().includes('home') ? '🏠' : '📍';
+        const key = db.ref('places').push().key;
+        await db.ref('places/' + key).set({ id: key, name, icon, lat: parseFloat(lat), lng: parseFloat(lng) });
+        msgEl.style.color = '#27ae60';
+        msgEl.textContent = `"${name}" added successfully at (${lat.toFixed(4)}, ${lng.toFixed(4)})!`;
+        nameInput.value = '';
+        document.getElementById('placeSearchInput').value = '';
+        if (temporaryPlaceMarker) {
+          placesMapInstance.removeLayer(temporaryPlaceMarker);
+          temporaryPlaceMarker = null;
+        }
+      } catch(e) {
+        msgEl.style.color = '#e74c3c';
+        msgEl.textContent = 'Failed to save place: ' + e.message;
+      }
+    };
+
+    window.togglePlacesMap = togglePlacesMap;
 
     function renderPlacesList(places) {
       const container = document.getElementById('placesList');
@@ -1311,12 +1505,21 @@
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`, { headers: { 'Accept-Language': 'en' } });
         const data = await res.json();
         if (!data.length) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'Location not found.'; return; }
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
         const icon = name.toLowerCase().includes('hostel') ? '🏫' : name.toLowerCase().includes('office') ? '🏢' : name.toLowerCase().includes('home') ? '🏠' : '📍';
         const key = db.ref('places').push().key;
-        await db.ref('places/' + key).set({ id: key, name, icon, lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
+        await db.ref('places/' + key).set({ id: key, name, icon, lat, lng: lon });
         msgEl.style.color = '#27ae60'; msgEl.textContent = `"${name}" added successfully!`;
         document.getElementById('placeNameInput').value = '';
         document.getElementById('placeSearchInput').value = '';
+
+        // If map is open, center on the new location
+        if (placesMapInstance) {
+          placesMapInstance.setView([lat, lon], 16);
+          if (temporaryPlaceMarker) placesMapInstance.removeLayer(temporaryPlaceMarker);
+          temporaryPlaceMarker = L.marker([lat, lon]).addTo(placesMapInstance).bindPopup(`📍 ${name}`).openPopup();
+        }
       } catch(e) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'Search failed. Check your connection.'; }
     }
 
@@ -1358,11 +1561,23 @@
       list.innerHTML = active.map(s => {
         const time = new Date(s.timestamp).toLocaleTimeString();
         const loc = s.lat ? `<a href="https://maps.google.com/?q=${s.lat},${s.lng}" target="_blank" style="color:#fff;text-decoration:underline;">📍 View on Map</a>` : '📍 No GPS';
-        return `<div class="sos-item">
-          <span>🆘 <b>${esc(s.name)}</b> (${esc(s.batchId)}) &nbsp;|&nbsp; ${time} &nbsp;|&nbsp; ${loc}</span>
+        const audioBtn = s.audioClip 
+          ? `<button class="small-btn" style="background:#fff; color:#c0392b; margin-left:10px; font-size:11px;" onclick="playSOSAudio('${esc(s.studentId)}')">🔊 Listen Audio</button>` 
+          : '';
+        return `<div class="sos-item" id="sos-item-${esc(s.studentId)}">
+          <span>🆘 <b>${esc(s.name)}</b> (${esc(s.batchId)}) &nbsp;|&nbsp; ${time} &nbsp;|&nbsp; ${loc} ${audioBtn}</span>
           <button class="sos-resolve" onclick="resolveSOSAlert('${esc(s.studentId)}')">✓ Resolved</button>
         </div>`;
       }).join('');
+
+      // Add playing helper function if not already there
+      window.playSOSAudio = function(studentId) {
+        const target = active.find(item => item.studentId === studentId);
+        if (target && target.audioClip) {
+          const audio = new Audio(target.audioClip);
+          audio.play().catch(err => alert("Playback error: " + err.message));
+        }
+      };
 
       // Play alert sound once per new SOS
       if (!sosAlertActive) {
