@@ -428,6 +428,9 @@
       <label>Destination Address</label>
       <input type="text" id="destAddress" placeholder="e.g. Home - 12 Gandhi Street, Chennai">
 
+      <!-- Quick Select Places -->
+      <div id="quickPlaces" style="margin-top:10px;"></div>
+
       <div class="dest-set" id="destSetMsg">📍 <span id="destSetText"></span></div>
 
       <div class="btn-row">
@@ -770,6 +773,32 @@
     }
 
     window.addEventListener("beforeunload", stopLocationSharing);
+
+    // Load admin-saved places as quick-select buttons
+    db.ref('places').on('value', snap => {
+      const places = Object.values(snap.val() || {});
+      const container = document.getElementById('quickPlaces');
+      if (!places.length) { container.innerHTML = ''; return; }
+      container.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:#888;margin-bottom:6px;">QUICK SELECT DESTINATION</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${places.map(p => `
+            <button onclick="selectPlace('${p.id}')" style="padding:8px 14px;border-radius:20px;border:2px solid #1e3c72;background:#fff;color:#1e3c72;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;">
+              ${p.icon || '\ud83d\udccd'} ${p.name}
+            </button>`).join('')}
+        </div>`;
+    });
+
+    async function selectPlace(id) {
+      const snap = await db.ref('places/' + id).once('value');
+      const p = snap.val(); if (!p) return;
+      document.getElementById('destAddress').value = p.name;
+      await db.ref('students/' + studentId).update({
+        destination: { lat: p.lat, lng: p.lng, address: p.name },
+        lastUpdated: Date.now()
+      });
+      showMsg(`Destination set to "${p.name}"!`, 'success');
+    }
   </script>
 
 </body>

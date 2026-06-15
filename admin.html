@@ -535,6 +535,18 @@
       <div id="map"></div>
     </div>
 
+    <!-- Manage Places -->
+    <div class="section">
+      <h2>📍 Manage Places</h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="text" id="placeNameInput" placeholder="Place name (e.g. Hostel, Office)" style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none;">
+        <input type="text" id="placeSearchInput" placeholder="Search address..." style="flex:2;min-width:180px;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none;" onkeydown="if(event.key==='Enter')searchAndAddPlace()">
+        <button class="small-btn" style="background:#27ae60;padding:9px 14px;font-size:13px;" onclick="searchAndAddPlace()">🔍 Search & Add</button>
+      </div>
+      <div id="placeMsg" style="font-size:13px;margin-bottom:8px;"></div>
+      <div id="placesList"><div class="empty">No places added yet.</div></div>
+    </div>
+
     <div class="section">
       <h2>➕ Add Student</h2>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
@@ -1249,7 +1261,84 @@
       a.click();
     }
 
-    function updateMap() { }
+    // ===== PLACES =====
+    let placeMarkers = {};
+
+    db.ref('places').on('value', snap => {
+      const places = snap.val() || {};
+      renderPlacesList(places);
+      updatePlaceMarkers(places);
+    });
+
+    function renderPlacesList(places) {
+      const container = document.getElementById('placesList');
+      const list = Object.values(places);
+      if (!list.length) { container.innerHTML = '<div class="empty">No places added yet.</div>'; return; }
+      container.innerHTML = list.map(p => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eee;font-size:13px;">
+          <span style="font-size:18px;">${esc(p.icon || '📍')}</span>
+          <span style="flex:1;font-weight:700;color:#333;">${esc(p.name)}</span>
+          <span style="color:#999;font-size:12px;">${parseFloat(p.lat).toFixed(4)}, ${parseFloat(p.lng).toFixed(4)}</span>
+          <button class="small-btn" onclick="focusPlace('${p.id}')">🗺️ View</button>
+          <button class="small-btn danger" onclick="deletePlace('${p.id}')">🗑</button>
+        </div>`).join('');
+    }
+
+    function updatePlaceMarkers(places) {
+      if (!map) return;
+      Object.values(placeMarkers).forEach(m => map.removeLayer(m));
+      placeMarkers = {};
+      Object.values(places).forEach(p => {
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="background:#1e3c72;color:#fff;border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;white-space:nowrap;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${esc(p.icon || '📍')} ${esc(p.name)}</div>`,
+          iconAnchor: [0, 0]
+        });
+        const m = L.marker([p.lat, p.lng], { icon }).addTo(map);
+        m.bindPopup(`<b>${esc(p.icon || '📍')} ${esc(p.name)}</b><br>${parseFloat(p.lat).toFixed(4)}, ${parseFloat(p.lng).toFixed(4)}`);
+        placeMarkers[p.id] = m;
+      });
+    }
+
+    async function searchAndAddPlace() {
+      const name = document.getElementById('placeNameInput').value.trim();
+      const query = document.getElementById('placeSearchInput').value.trim();
+      const msgEl = document.getElementById('placeMsg');
+      if (!name) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'Enter a place name.'; return; }
+      if (!query) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'Enter an address to search.'; return; }
+      msgEl.style.color = '#888'; msgEl.textContent = 'Searching...';
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`, { headers: { 'Accept-Language': 'en' } });
+        const data = await res.json();
+        if (!data.length) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'Location not found.'; return; }
+        const icon = name.toLowerCase().includes('hostel') ? '🏫' : name.toLowerCase().includes('office') ? '🏢' : name.toLowerCase().includes('home') ? '🏠' : '📍';
+        const key = db.ref('places').push().key;
+        await db.ref('places/' + key).set({ id: key, name, icon, lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
+        msgEl.style.color = '#27ae60'; msgEl.textContent = `"${name}" added successfully!`;
+        document.getElementById('placeNameInput').value = '';
+        document.getElementById('placeSearchInput').value = '';
+      } catch(e) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'Search failed. Check your connection.'; }
+    }
+
+    function focusPlace(id) {
+      db.ref('places/' + id).once('value').then(snap => {
+        const p = snap.val(); if (!p) return;
+        if (!map) return;
+        map.setView([p.lat, p.lng], 16);
+        if (placeMarkers[id]) placeMarkers[id].openPopup();
+        document.getElementById('mapSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+
+    async function deletePlace(id) {
+      if (!confirm('Delete this place?')) return;
+      await db.ref('places/' + id).remove();
+    }
+
+    function updateMap() {
+      if (map) updatePlaceMarkers({}); // refresh after map ready
+      db.ref('places').once('value').then(snap => updatePlaceMarkers(snap.val() || {}));
+    }
 
     // ─── SOS Listener ──────────────────────────────────────────────
     let sosAlertActive = false;
